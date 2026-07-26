@@ -1,0 +1,42 @@
+<resources>
+    <string name="app_name">FlutterTap</string>
+
+    <string name="status_title">状态</string>
+    <string name="status_detecting">正在检测 Root 后端…</string>
+    <string name="status_root_granted">已获得 Root 权限</string>
+    <string name="status_root_denied">Root 权限被拒绝</string>
+    <string name="status_backend_magisk">后端：Magisk</string>
+    <string name="status_backend_kernelsu">后端：KernelSU</string>
+    <string name="status_backend_apatch">后端：APatch</string>
+    <string name="status_backend_unknown">后端：未知</string>
+    <string name="status_module_installed">FlutterTap 模块：已安装</string>
+    <string name="status_module_not_installed">FlutterTap 模块：未安装</string>
+
+    <string name="proxy_title">代理</string>
+    <string name="proxy_master_switch">启用拦截</string>
+    <string name="proxy_ip_label">代理 IP</string>
+    <string name="proxy_port_label">代理端口</string>
+    <string name="proxy_save_button">保存</string>
+    <string name="proxy_saved_confirmation">配置已保存</string>
+    <string name="proxy_invalid_ip">请输入有效的 IPv4 地址</string>
+    <string name="proxy_invalid_port">请输入 1 到 65535 之间的端口</string>
+
+    <string name="apps_title">目标应用</string>
+    <string name="apps_subtitle">选择 FlutterTap 需要拦截的已安装应用</string>
+    <string name="apps_search_hint">搜索应用</string>
+    <string name="apps_selected_count">已选择 %d 个应用</string>
+    <string name="apps_empty">未找到应用</string>
+
+    <string name="language_title">语言</string>
+    <string name="language_system">跟随系统</string>
+    <string name="language_pt_br">Português (Brasil)</string>
+    <string name="language_en">English</string>
+    <string name="language_zh">中文</string>
+
+    <string name="about_title">关于</string>
+    <string name="about_description">将所选 Flutter 应用的网络流量重定向到可配置的代理，并绕过 TLS 证书验证，用于流量分析。作为 Zygisk 模块运行于 Magisk、KernelSU 或 APatch。</string>
+    <string name="about_developer">开发者：Eduardo Lopes</string>
+    <string name="about_version">版本 %s</string>
+
+    <string name="error_root_required">配置 FlutterTap 需要 Root 权限</string>
+</resources>

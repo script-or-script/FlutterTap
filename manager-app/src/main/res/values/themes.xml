@@ -1,0 +1,12 @@
+<resources>
+    <!-- Light theme. The matching values-night/themes.xml override is what
+         actually fixes the "white background while the phone is in dark
+         mode" issue: without a night variant, the OS keeps using this one
+         even when the system theme is dark. -->
+    <style name="Theme.FlutterTap" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">#FFFFFF</item>
+        <item name="android:navigationBarColor">#FFFFFF</item>
+        <item name="android:windowBackground">#FFFFFF</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

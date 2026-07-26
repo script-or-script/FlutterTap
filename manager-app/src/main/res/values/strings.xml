@@ -1,0 +1,42 @@
+<resources>
+    <string name="app_name">FlutterTap</string>
+
+    <string name="status_title">Status</string>
+    <string name="status_detecting">Detecting root backend…</string>
+    <string name="status_root_granted">Root access granted</string>
+    <string name="status_root_denied">Root access denied</string>
+    <string name="status_backend_magisk">Backend: Magisk</string>
+    <string name="status_backend_kernelsu">Backend: KernelSU</string>
+    <string name="status_backend_apatch">Backend: APatch</string>
+    <string name="status_backend_unknown">Backend: unknown</string>
+    <string name="status_module_installed">FlutterTap module: installed</string>
+    <string name="status_module_not_installed">FlutterTap module: not installed</string>
+
+    <string name="proxy_title">Proxy</string>
+    <string name="proxy_master_switch">Enable hooking</string>
+    <string name="proxy_ip_label">Proxy IP</string>
+    <string name="proxy_port_label">Proxy port</string>
+    <string name="proxy_save_button">Save</string>
+    <string name="proxy_saved_confirmation">Configuration saved</string>
+    <string name="proxy_invalid_ip">Enter a valid IPv4 address</string>
+    <string name="proxy_invalid_port">Enter a port between 1 and 65535</string>
+
+    <string name="apps_title">Target apps</string>
+    <string name="apps_subtitle">Choose which installed apps FlutterTap should hook</string>
+    <string name="apps_search_hint">Search apps</string>
+    <string name="apps_selected_count">%d app(s) selected</string>
+    <string name="apps_empty">No apps found</string>
+
+    <string name="language_title">Language</string>
+    <string name="language_system">Follow system</string>
+    <string name="language_pt_br">Português (Brasil)</string>
+    <string name="language_en">English</string>
+    <string name="language_zh">中文</string>
+
+    <string name="about_title">About</string>
+    <string name="about_description">Redirects the network traffic of selected Flutter apps to a configurable proxy and bypasses TLS certificate verification, for traffic analysis purposes. Works as a Zygisk module under Magisk, KernelSU or APatch.</string>
+    <string name="about_developer">Developed by Eduardo Lopes</string>
+    <string name="about_version">Version %s</string>
+
+    <string name="error_root_required">Root access is required to configure FlutterTap</string>
+</resources>

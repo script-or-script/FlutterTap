@@ -1,0 +1,10 @@
+<resources>
+    <!-- Dark theme, picked automatically by Android when the system is in
+         dark mode. See the comment in values/themes.xml. -->
+    <style name="Theme.FlutterTap" parent="android:Theme.Material.NoActionBar">
+        <item name="android:statusBarColor">#121212</item>
+        <item name="android:navigationBarColor">#121212</item>
+        <item name="android:windowBackground">#121212</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>FlutterTap — Relatório de Desenvolvimento</title>
+<style>
+  @page { margin: 2.2cm 1.8cm; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #1a1a1a; }
+  h1 { font-size: 22pt; color: #0D47A1; border-bottom: 3px solid #0D47A1; padding-bottom: 8px; }
+  h2 { font-size: 15pt; color: #0D47A1; margin-top: 28px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+  h3 { font-size: 12.5pt; color: #333; margin-top: 18px; }
+  .cover { text-align: center; padding-top: 140px; page-break-after: always; }
+  .cover h1 { border: none; font-size: 30pt; }
+  .cover .subtitle { font-size: 14pt; color: #555; margin-top: 10px; }
+  .cover .meta { margin-top: 60px; font-size: 11pt; color: #777; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 10pt; }
+  th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; vertical-align: top; }
+  th { background: #0D47A1; color: white; }
+  tr:nth-child(even) { background: #f4f7fb; }
+  code, pre { font-family: Consolas, monospace; font-size: 9.5pt; }
+  pre { background: #f0f0f0; padding: 10px; border-radius: 4px; overflow-x: auto; border-left: 3px solid #0D47A1; }
+  code { background: #eee; padding: 1px 4px; border-radius: 3px; }
+  .box { background: #eef3fb; border-left: 4px solid #0D47A1; padding: 10px 14px; margin: 12px 0; }
+  .warn { background: #fff4e5; border-left: 4px solid #e07b00; padding: 10px 14px; margin: 12px 0; }
+  ul, ol { margin-top: 4px; }
+  .signature { margin-top: 40px; font-style: italic; color: #444; }
+  .page-break { page-break-before: always; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>FlutterTap</h1>
+  <div class="subtitle">Relatório de Desenvolvimento</div>
+  <div class="subtitle">Módulo Zygisk (Magisk / KernelSU / APatch) para interceptação de tráfego de apps Flutter</div>
+  <div class="meta">
+    Desenvolvido por Eduardo Lopes<br>
+    Data: 26 de julho de 2026
+  </div>
+</div>
+
+<h2>1. Resumo executivo</h2>
+<p>
+Este projeto porta a lógica do script Frida <code>flutter+burp.js</code> — que contorna a verificação de
+certificado TLS (SSL pinning) do BoringSSL usado pelo engine do Flutter e redireciona o tráfego de rede do
+app para um proxy configurável — para um <strong>módulo Zygisk nativo</strong>, compatível simultaneamente
+com Magisk, KernelSU (via Zygisk/Zygisk Next) e APatch. Diferente do script original, que depende de uma
+sessão manual do Frida (via USB, com <code>frida-server</code> rodando), o módulo funciona de forma
+persistente e automática, sem qualquer ferramenta externa conectada.
+</p>
+<p>
+Junto ao módulo, foi desenvolvido um <strong>aplicativo gerenciador</strong> (Jetpack Compose) que permite
+configurar, direto no aparelho, o IP/porta do proxy e quais apps instalados devem ser interceptados —
+exatamente como a maioria dos módulos Magisk/KernelSU do mercado (ex: seleção de apps por checkbox).
+</p>
+
+<h2>2. O script original</h2>
+<p>
+O <code>flutter+burp.js</code> é uma técnica pública e amplamente usada na comunidade de pentest mobile
+(baseada em pesquisa da NVISO sobre o engine do Flutter), que funciona assim:
+</p>
+<ol>
+  <li>Localiza <code>libflutter.so</code> carregada no processo do app.</li>
+  <li>Faz o parsing manual do cabeçalho ELF (segmentos <code>PT_LOAD</code>/<code>PT_GNU_RELRO</code>) para
+      delimitar as regiões de memória onde procurar.</li>
+  <li>Escaneia a memória procurando as strings <code>"ssl_client"</code> e
+      <code>"Socket_CreateConnect"</code>, usadas como pontos de referência.</li>
+  <li>A partir dessas strings, localiza (via padrões de instrução <code>adrp</code>/<code>add</code> no
+      ARM64, ou <code>lea</code> relativo a RIP no x64) o endereço real das funções internas
+      <code>verify_cert_chain</code> (verificação do certificado) e <code>GetSockAddr</code> (montagem do
+      endereço de destino da conexão).</li>
+  <li>Instala 3 hooks: um em <code>GetSockAddr</code> para capturar o ponteiro do <code>sockaddr</code>;
+      um em <code>socket()</code> para sobrescrever IP/porta desse <code>sockaddr</code> com os valores do
+      proxy configurado; e um em <code>verify_cert_chain</code> para forçar o retorno "certificado válido".
+  </li>
+</ol>
+<p>
+Nenhuma dessas três funções é exportada/pública — por isso o script precisa "descobrir" os endereços em
+tempo real a cada execução, em vez de simplesmente chamar uma função pelo nome.
+</p>
+
+<h2 class="page-break">3. Arquitetura da solução</h2>
+
+<h3>3.1 Módulo nativo (C++, Zygisk)</h3>
+<table>
+<tr><th>Lógica do script original</th><th>Equivalente no módulo nativo</th></tr>
+<tr><td><code>findAppId()</code></td><td><code>AppSpecializeArgs::nice_name</code>, lido em <code>preAppSpecialize</code></td></tr>
+<tr><td><code>BURP_PROXY_IP</code>/<code>PORT</code> fixos no código</td><td><code>/data/adb/fluttertap/config.json</code>, editável pelo app gerenciador</td></tr>
+<tr><td><code>parseElf()</code></td><td><code>elf_utils.cpp</code></td></tr>
+<tr><td><code>scanMemory()</code> (busca por padrão com curingas)</td><td><code>mem_scan.cpp</code></td></tr>
+<tr><td><code>Instruction.parse</code> (Capstone por trás do Frida)</td><td>Capstone, linkado diretamente (<code>addr_resolver.cpp</code>)</td></tr>
+<tr><td>Hook em <code>GetSockAddr</code> (onEnter)</td><td><code>DobbyInstrument</code></td></tr>
+<tr><td>Hook em <code>socket()</code> (sobrescreve sockaddr)</td><td><code>DobbyHook</code> na função global da libc</td></tr>
+<tr><td>Hook em <code>verify_cert_chain</code> (onLeave)</td><td><code>DobbyHook</code> com wrapper que força o retorno</td></tr>
+</table>
+<p>
+A parte de resolução de endereço (ARM64 e x64) foi portada <strong>instrução por instrução</strong>,
+incluindo peculiaridades do script original (explicadas na seção 4), usando a mesma biblioteca de
+desmontagem que o próprio Frida usa por baixo dos panos (<strong>Capstone</strong>), em vez de decodificar
+manualmente os opcodes — isso elimina uma classe inteira de bugs sutis que uma reimplementação "à mão"
+correria o risco de introduzir.
+</p>
+
+<h3>3.2 Sistema de configuração compartilhada</h3>
+<p>
+O arquivo <code>/data/adb/fluttertap/config.json</code> guarda IP/porta do proxy, se a interceptação está
+ativa e a lista de pacotes-alvo. Ele fica <em>fora</em> da pasta do módulo (<code>/data/adb/modules/fluttertap</code>),
+para sobreviver a atualizações/reinstalações do módulo. Como o processo do zygote pode não ter permissão
+SELinux para ler arquivos em <code>/data/adb</code> diretamente, a leitura é feita através do
+<strong>processo companion</strong> do Zygisk (que roda como root irrestrito), via um protocolo simples
+sobre socket Unix.
+</p>
+
+<h3>3.3 App gerenciador (Jetpack Compose)</h3>
+<ul>
+  <li>Lista os apps instalados no aparelho e permite marcar quais devem ser interceptados (com busca).</li>
+  <li>Campos para IP/porta do proxy, com validação, e um interruptor geral de ativação.</li>
+  <li>Detecta root e o backend ativo (Magisk/KernelSU/APatch) e se o módulo está instalado — apenas para
+      exibição, já que os três implementam a mesma API Zygisk.</li>
+  <li>Grava a configuração via shell root (<code>libsu</code>), codificada em base64 para não precisar
+      escapar caracteres especiais.</li>
+  <li>3 idiomas: Português (Brasil), Inglês e Chinês, trocáveis direto no app.</li>
+  <li>Tema claro/escuro sempre acompanhando o tema do sistema (Compose + <code>values-night/</code>),
+      corrigindo o problema relatado de telas com fundo branco mesmo com o celular em modo escuro.</li>
+</ul>
+
+<h2 class="page-break">4. Peculiaridades do script preservadas de propósito</h2>
+<p>
+Para o módulo se comportar <strong>exatamente</strong> como o script original, algumas particularidades —
+que poderiam parecer "erros" à primeira vista — foram mantidas intencionalmente:
+</p>
+<ul>
+  <li><strong>Sem suporte a 32 bits.</strong> O script original só trata <code>Process.arch == 'arm64'</code>
+      ou <code>'x64'</code> — não existe um caminho para ARM32/x86 32 bits nem no original. Por isso o
+      módulo também só é compilado para <code>arm64-v8a</code> (aparelhos reais) e <code>x86_64</code>
+      (emuladores).</li>
+  <li><strong>"a última correspondência vale".</strong> O <code>Memory.scan</code> do script chama o
+      callback para cada ocorrência encontrada, sempre sobrescrevendo a mesma variável — ou seja, se um
+      padrão aparecer mais de uma vez, vale o <em>último</em> encontrado, não o primeiro. A busca de memória
+      do módulo nativo reproduz esse mesmo comportamento.</li>
+  <li><strong>Varredura byte a byte no x64.</strong> Os trechos de "rastrear para trás" no x64 avançam
+      1 byte por vez tentando decodificar uma instrução válida a cada posição (em vez de avançar pelo
+      tamanho real da instrução anterior). Isso foi copiado exatamente assim, pois é o que foi validado
+      empiricamente contra builds reais do BoringSSL/Flutter.</li>
+  <li><strong>Caso especial do app da Alibaba.</strong> O script trata separadamente o padrão de bytes do
+      app <code>com.alibaba.intl.android.apps.poseidon</code>, que difere dos demais — mantido no módulo.</li>
+</ul>
+
+<h2>5. Melhorias deliberadas (sem mudar o comportamento observável)</h2>
+<p>
+O script original foi feito para uma sessão curta e supervisionada por um humano. O módulo roda sozinho,
+durante toda a vida do app, então alguns pontos foram reforçados sem alterar o que acontece na rede:
+</p>
+<ul>
+  <li><strong>Captura do sockaddr por thread</strong> (em vez de uma única variável global), evitando
+      condição de corrida entre conexões simultâneas.</li>
+  <li><strong>Proteção contra SIGSEGV/SIGBUS</strong> em volta de toda leitura de memória "heurística" —
+      se um endereço calculado acabar sendo inválido, o módulo registra um aviso e desiste daquele trecho,
+      em vez de derrubar o app do usuário.</li>
+  <li><strong>Ocupação zero em apps não selecionados.</strong> Antes de fazer qualquer trabalho, o módulo
+      verifica se o processo atual está na lista de apps escolhidos; se não estiver, ele se descarrega
+      da memória imediatamente (<code>DLCLOSE_MODULE_LIBRARY</code>).</li>
+  <li><strong>Hook do <code>socket()</code> via Dobby direto</strong>, e não pela API oficial de PLT hook
+      do Zygisk — porque essa API só é válida até o fim do <code>postAppSpecialize</code>, e
+      <code>libflutter.so</code> normalmente só carrega bem depois disso, durante a inicialização normal
+      do app.</li>
+</ul>
+
+<h2 class="page-break">6. Desafios encontrados durante o desenvolvimento</h2>
+<p>
+Esta seção documenta os problemas reais enfrentados ao compilar o projeto pela primeira vez, e como foram
+resolvidos — útil para quem for dar manutenção no projeto depois.
+</p>
+
+<h3>6.1 Licença restritiva do Zygisk Next</h3>
+<div class="warn">
+O plano inicial era usar o header da API Zygisk a partir do repositório <code>ZygiskNext</code>, mas esse
+projeto mudou de licença e agora proíbe explicitamente copiar/extrair qualquer trecho de código dele. A
+solução foi usar a fonte oficial e correta: o repositório <code>topjohnwu/zygisk-module-sample</code>,
+mantido pelo próprio criador do Magisk, cujo header é licenciado em 0BSD (equivalente a domínio público)
+exatamente para uso livre por desenvolvedores de módulos.
+</div>
+
+<h3>6.2 Repositório Dobby com o backend Linux/Android quebrado</h3>
+<div class="warn">
+O commit mais recente do Dobby (biblioteca de hooking inline usada para os hooks internos) não compila
+para Android: há uma inconsistência real no próprio código-fonte deles entre o nome de um campo de struct
+(<code>RuntimeModule.base</code> vs. o uso de <code>.load_address</code> em vários arquivos) e entre um
+campo e um método (<code>MemRange.start</code> vs. <code>start()</code>). Isso foi confirmado de forma
+independente: o workflow de CI do próprio projeto Dobby define um job que deveria publicar um pacote
+pré-compilado para Android, mas esse artefato simplesmente não aparece nos releases — sinal de que o job
+falha silenciosamente há tempos.
+<br><br>
+A solução foi fixar o submódulo Git do Dobby em um commit anterior (<code>e9fe7fb</code>, de abril de
+2023), o último antes da reestruturação que introduziu essa inconsistência, e aplicar dois pequenos
+ajustes locais por cima:
+<ol>
+  <li>Uma função (<code>Logger::Shared()</code>) definida em um header estava sem a palavra-chave
+      <code>inline</code>, causando erro de "símbolo duplicado" ao linkar.</li>
+  <li>O alvo de biblioteca compartilhada <code>dobby</code> (que não é usado pelo projeto — só a versão
+      estática é) foi desativado apenas para Android, já que ele também falha ao linkar pelo mesmo motivo.</li>
+</ol>
+</div>
+
+<h3>6.3 APIs experimentais do Jetpack Compose Material 3</h3>
+<p>
+Durante a build do app gerenciador, o componente <code>ExposedDropdownMenuBox</code> (usado inicialmente
+no seletor de idioma) e o <code>TopAppBar</code> básico se mostraram marcados como API experimental nesta
+versão do Compose, quebrando a build por padrão. O seletor de idioma foi reescrito com um
+<code>DropdownMenu</code> simples (API estável), e foi adicionado um opt-in explícito
+(<code>@OptIn(ExperimentalMaterial3Api::class)</code>) para o restante.
+</p>
+
+<h3>6.4 Ambiente de build</h3>
+<p>
+A máquina tinha o Java 26 como padrão do sistema, versão recente demais para o Gradle 8.11.1 rodar. A
+solução foi apontar o <code>JAVA_HOME</code> para o JDK 21 que já vem embutido no próprio Android Studio
+instalado, evitando precisar baixar/instalar outro JDK à parte.
+</p>
+
+<h2 class="page-break">7. Estrutura do projeto</h2>
+<pre>
+Modulo SukiSu/
+├── module/                     Módulo Zygisk nativo (Gradle + CMake)
+│   └── src/main/cpp/
+│       ├── main.cpp             Ponto de entrada Zygisk (pre/postAppSpecialize)
+│       ├── module_config.*      Schema e matching de pacotes-alvo
+│       ├── companion.*          Processo companion (leitura root do config)
+│       ├── elf_utils.*          Parsing do ELF de libflutter.so
+│       ├── mem_scan.*           Busca de padrões de bytes com curinga
+│       ├── addr_resolver.*      Resolução de endereços via Capstone
+│       ├── hooks.*              Instalação dos hooks via Dobby
+│       └── third_party/         Capstone e Dobby (submódulos git)
+│   └── template/                module.prop, customize.sh, uninstall.sh
+├── manager-app/                 App gerenciador (Kotlin + Jetpack Compose)
+├── scripts/build_module_zip.sh  Empacota o .zip flashável final
+└── docs/                        Esta documentação
+</pre>
+
+<h2>8. Compatibilidade</h2>
+<table>
+<tr><th>Item</th><th>Suporte</th></tr>
+<tr><td>Versões do Android</td><td>Android 10 (API 29) até Android 17 (API 37, mais recente disponível no momento)</td></tr>
+<tr><td>Arquiteturas</td><td>arm64-v8a (aparelhos reais) e x86_64 (emuladores)</td></tr>
+<tr><td>Root</td><td>Magisk (Zygisk nativo), KernelSU (com Zygisk/Zygisk Next), APatch</td></tr>
+<tr><td>Idiomas do app</td><td>Português (Brasil), Inglês, Chinês</td></tr>
+</table>
+
+<h2>9. Aviso legal e ético</h2>
+<div class="box">
+Esta ferramenta contorna a verificação de certificado TLS de apps Flutter para fins de <strong>análise de
+tráfego</strong> (pentest mobile, engenharia reversa, pesquisa de segurança). Ela deve ser usada apenas em
+aplicativos que você tem autorização para testar (seus próprios apps, ou em um engajamento de teste de
+segurança autorizado). O módulo não tem nenhum alvo específico embutido — a seleção de quais apps
+interceptar é sempre manual, feita pelo usuário através do app gerenciador.
+</div>
+
+<h2>10. Próximos passos</h2>
+<ol>
+  <li>Testar o módulo em um dispositivo real (ou emulador com root) contra um app Flutter conhecido, e
+      validar a captura de tráfego no Burp Suite (ou outro proxy).</li>
+  <li>Ajustar a resolução de endereços caso alguma versão específica do engine Flutter/BoringSSL gere
+      código ligeiramente diferente do esperado (o que também aconteceria com o script original).</li>
+  <li>Publicar o projeto no GitHub, com README, tutorial de instalação e capturas de tela — a ser feito
+      após os testes acima.</li>
+</ol>
+
+<p class="signature">— Eduardo Lopes</p>
+
+</body>
+</html>
