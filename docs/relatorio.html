@@ -22,6 +22,7 @@
   code { background: #eee; padding: 1px 4px; border-radius: 3px; }
   .box { background: #eef3fb; border-left: 4px solid #0D47A1; padding: 10px 14px; margin: 12px 0; }
   .warn { background: #fff4e5; border-left: 4px solid #e07b00; padding: 10px 14px; margin: 12px 0; }
+  .ok { background: #eaf7ea; border-left: 4px solid #2e7d32; padding: 10px 14px; margin: 12px 0; }
   ul, ol { margin-top: 4px; }
   .signature { margin-top: 40px; font-style: italic; color: #444; }
   .page-break { page-break-before: always; }
@@ -255,14 +256,90 @@ segurança autorizado). O módulo não tem nenhum alvo específico embutido — 
 interceptar é sempre manual, feita pelo usuário através do app gerenciador.
 </div>
 
-<h2>10. Próximos passos</h2>
+<h2 class="page-break">10. Validação em dispositivo real</h2>
+<p>
+Após o desenvolvimento inicial, o módulo foi testado em um aparelho físico já disponível: um
+<strong>OnePlus 5, Android 10, arquitetura arm64-v8a</strong>, com root via Magisk (fork "Kitsune Magisk"
+v27.2) e Zygisk fornecido pelo módulo <strong>NeoZygisk</strong> (já que esse fork não usa o Zygisk nativo).
+O Burp Suite já estava rodando na máquina do desenvolvedor, escutando em <code>192.168.15.13:8083</code>,
+na mesma rede Wi-Fi do aparelho.
+</p>
+
+<h3>10.1 Passos executados</h3>
 <ol>
-  <li>Testar o módulo em um dispositivo real (ou emulador com root) contra um app Flutter conhecido, e
-      validar a captura de tráfego no Burp Suite (ou outro proxy).</li>
+  <li>Empacotamento do módulo (<code>scripts/build_module_zip.sh</code>) e instalação via
+      <code>magisk --install-module</code>.</li>
+  <li>Escrita direta do <code>config.json</code> apontando para o proxy real e para dois apps Flutter já
+      instalados no aparelho: <code>com.pentestkit.burptestapp</code> (um app dedicado a esse tipo de
+      teste) e <code>com.reqable.android</code> (uma ferramenta de depuração de rede real).</li>
+  <li>Reinicialização do aparelho para o Zygisk carregar o módulo.</li>
+  <li>Abertura de cada app e acompanhamento do log do módulo (<code>adb logcat</code>) e do histórico de
+      proxy do Burp.</li>
+</ol>
+
+<h3>10.2 Resultado</h3>
+<div class="ok">
+<strong>Sucesso confirmado com tráfego real, na primeira tentativa.</strong> O log do módulo mostrou a
+sequência completa esperada para os dois apps: <code>libflutter.so</code> carregada → endereços de
+<code>verify_cert_chain</code> e <code>GetSockAddr</code> resolvidos corretamente via Capstone → hooks
+instalados → <code>sockaddr</code> reescrito a cada nova conexão para <code>192.168.15.13:8083</code>.
+<br><br>
+No app <code>com.reqable.android</code>, o Burp capturou e decodificou de verdade requisições HTTPS reais
+(para <code>app.reqable.com</code> e <code>event.reqable.com</code>, incluindo corpo JSON com informações
+do dispositivo e da versão do app) — <strong>sem precisar instalar nenhum certificado no aparelho</strong>,
+exatamente o comportamento esperado do bypass de verificação de certificado.
+</div>
+
+<h3>10.3 Achado durante o teste (não relacionado ao módulo)</h3>
+<div class="warn">
+No app <code>com.pentestkit.burptestapp</code>, todas as requisições falhavam com
+<code>SocketException: Permission denied, errno = 13</code>, independente do endereço de destino. A
+investigação (<code>dumpsys package</code>) mostrou que esse app específico <strong>não declara a
+permissão <code>android.permission.INTERNET</code></strong> no seu manifesto — por isso nenhuma conexão de
+rede é possível para ele, com ou sem o FlutterTap. Não é um problema do módulo (que resolveu os endereços e
+instalou os hooks normalmente nesse app também), e sim uma limitação do app de teste em si.
+</div>
+
+<h2 class="page-break">11. Guia de instalação manual (em um aparelho novo)</h2>
+
+<h3>11.1 Arquivos necessários</h3>
+<table>
+<tr><th>Arquivo</th><th>Como gerar</th><th>O que é</th></tr>
+<tr><td><code>FlutterTap-&lt;versão&gt;.zip</code></td><td><code>./scripts/build_module_zip.sh</code></td><td>Módulo flashável (Magisk/KernelSU/APatch)</td></tr>
+<tr><td><code>manager-app-debug.apk</code> (ou release)</td><td><code>./gradlew :manager-app:assembleDebug</code></td><td>App gerenciador</td></tr>
+</table>
+<p>Esses dois arquivos são gerados a partir do código-fonte e não ficam versionados no Git — para
+distribuir prontos, o caminho padrão é anexá-los a uma <em>Release</em> do GitHub.</p>
+
+<h3>11.2 Passo a passo</h3>
+<ol>
+  <li><strong>Ter root com Zygisk ativo.</strong> Magisk, KernelSU ou APatch instalado; Zygisk ligado em
+      Configurações → Zygisk (no Magisk) ou, se o Zygisk nativo não funcionar bem no seu fork/ROM, instalar
+      e habilitar o módulo <strong>Zygisk Next / NeoZygisk</strong> antes de tudo. Reiniciar depois.</li>
+  <li><strong>Copiar o <code>.zip</code> do módulo para o aparelho.</strong></li>
+  <li><strong>Instalar o módulo</strong> pelo app do Magisk/KernelSU/APatch → aba Módulos → "Instalar a
+      partir do armazenamento" → selecionar o <code>.zip</code>. (Ou, via terminal root:
+      <code>magisk --install-module /caminho/FlutterTap.zip</code>.)</li>
+  <li><strong>Reiniciar o aparelho</strong> — obrigatório, o Zygisk só injeta em processos criados depois
+      de carregado no boot.</li>
+  <li><strong>Instalar o app gerenciador</strong> (<code>.apk</code>), permitindo "fontes desconhecidas" se
+      necessário.</li>
+  <li><strong>Abrir o FlutterTap e conceder root</strong> quando solicitado.</li>
+  <li><strong>Selecionar o(s) app(s)-alvo</strong> e configurar IP/porta do proxy (o IP da máquina rodando
+      o Burp/proxy, na mesma rede Wi-Fi do aparelho).</li>
+  <li><strong>Forçar parada e reabrir o app-alvo</strong> — o hook só entra em processos novos.</li>
+</ol>
+
+<h2>12. Próximos passos</h2>
+<ol>
+  <li class="ok" style="list-style:none; margin-left:-20px; padding:6px 10px;">✔ Testar o módulo em um dispositivo real contra um app Flutter conhecido e validar a captura de
+      tráfego no Burp Suite — <strong>concluído</strong> (seção 10).</li>
   <li>Ajustar a resolução de endereços caso alguma versão específica do engine Flutter/BoringSSL gere
       código ligeiramente diferente do esperado (o que também aconteceria com o script original).</li>
-  <li>Publicar o projeto no GitHub, com README, tutorial de instalação e capturas de tela — a ser feito
-      após os testes acima.</li>
+  <li>Publicar o projeto no GitHub: README completo, tutorial de instalação, capturas de tela, licença.</li>
+  <li>Preparar e enviar o módulo para a página oficial de módulos do Magisk
+      (<a href="https://github.com/Magisk-Modules-Repo">Magisk-Modules-Repo</a>), seguindo os requisitos de
+      submissão desse repositório.</li>
 </ol>
 
 <p class="signature">— Eduardo Lopes</p>
