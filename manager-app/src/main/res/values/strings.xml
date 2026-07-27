@@ -9,8 +9,9 @@
     <string name="status_backend_kernelsu">Manager: KernelSU</string>
     <string name="status_backend_apatch">Manager: APatch</string>
     <string name="status_backend_unknown">Manager: unknown</string>
-    <string name="status_module_installed">FlutterTap module: installed</string>
-    <string name="status_module_not_installed">FlutterTap module: not installed</string>
+    <string name="status_module_active">FlutterTap module: installed and enabled</string>
+    <string name="status_module_inactive">FlutterTap module: not installed or disabled</string>
+    <string name="status_grant_root_button">Grant root access</string>
 
     <string name="proxy_title">Proxy</string>
     <string name="proxy_master_switch">Enable hooking</string>
@@ -20,6 +21,7 @@
     <string name="proxy_saved_confirmation">Configuration saved</string>
     <string name="proxy_invalid_ip">Enter a valid IPv4 address</string>
     <string name="proxy_invalid_port">Enter a port between 1 and 65535</string>
+    <string name="proxy_burp_invisible_note">Remember to enable "Invisible Proxying" in Burp Suite\'s proxy listener settings.</string>
 
     <string name="apps_title">Target apps</string>
     <string name="apps_subtitle">Choose which installed apps FlutterTap should hook</string>

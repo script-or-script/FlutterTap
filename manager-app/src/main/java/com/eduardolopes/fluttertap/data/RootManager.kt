@@ -9,7 +9,8 @@ enum class RootBackend { MAGISK, KERNELSU, APATCH, UNKNOWN }
 data class RootStatus(
     val granted: Boolean,
     val backend: RootBackend,
-    val moduleInstalled: Boolean,
+    /** True only when the module directory exists AND has no `disable` marker file. */
+    val moduleActive: Boolean,
 )
 
 /** All root shell I/O for FlutterTap: root/backend detection and config.json read/write. */
@@ -21,7 +22,7 @@ object RootManager {
     // Runs on a background thread; callers are expected to launch it off the main thread.
     fun queryStatus(): RootStatus {
         val granted = Shell.getShell().isRoot
-        if (!granted) return RootStatus(granted = false, backend = RootBackend.UNKNOWN, moduleInstalled = false)
+        if (!granted) return RootStatus(granted = false, backend = RootBackend.UNKNOWN, moduleActive = false)
 
         val backend = when {
             exists("/data/adb/ksu") || Shell.cmd("ksud --version").exec().isSuccess -> RootBackend.KERNELSU
@@ -29,8 +30,19 @@ object RootManager {
             Shell.cmd("magisk -v").exec().isSuccess -> RootBackend.MAGISK
             else -> RootBackend.UNKNOWN
         }
-        val moduleInstalled = exists(MODULE_DIR)
-        return RootStatus(granted = true, backend = backend, moduleInstalled = moduleInstalled)
+        val moduleActive = exists(MODULE_DIR) && !exists("$MODULE_DIR/disable")
+        return RootStatus(granted = true, backend = backend, moduleActive = moduleActive)
+    }
+
+    /**
+     * Closes the cached shell if it's not root and asks again -- covers the case where the
+     * user dismissed or denied the automatic prompt on first launch and now wants to retry
+     * (e.g. after fixing the app's permission in their root manager). A prior hard "deny"
+     * recorded by the root manager itself still won't re-prompt; only it can undo that.
+     */
+    fun requestRoot(): RootStatus {
+        Shell.getCachedShell()?.let { if (!it.isRoot) it.close() }
+        return queryStatus()
     }
 
     fun readConfig(): ConfigData {

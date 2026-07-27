@@ -9,8 +9,9 @@
     <string name="status_backend_kernelsu">المدير: KernelSU</string>
     <string name="status_backend_apatch">المدير: APatch</string>
     <string name="status_backend_unknown">المدير: غير معروف</string>
-    <string name="status_module_installed">وحدة FlutterTap: مثبَّتة</string>
-    <string name="status_module_not_installed">وحدة FlutterTap: غير مثبَّتة</string>
+    <string name="status_module_active">وحدة FlutterTap: مثبَّتة ومفعَّلة</string>
+    <string name="status_module_inactive">وحدة FlutterTap: غير مثبَّتة أو معطَّلة</string>
+    <string name="status_grant_root_button">منح صلاحية الروت</string>
 
     <string name="proxy_title">البروكسي</string>
     <string name="proxy_master_switch">تفعيل الاعتراض</string>
@@ -20,6 +21,7 @@
     <string name="proxy_saved_confirmation">تم حفظ الإعدادات</string>
     <string name="proxy_invalid_ip">أدخل عنوان IPv4 صالحًا</string>
     <string name="proxy_invalid_port">أدخل منفذًا بين 1 و65535</string>
+    <string name="proxy_burp_invisible_note">تذكَّر تفعيل خيار "Invisible Proxying" في إعدادات مستمع البروكسي في Burp Suite.</string>
 
     <string name="apps_title">التطبيقات المستهدَفة</string>
     <string name="apps_subtitle">اختر التطبيقات المثبَّتة التي يجب على FlutterTap اعتراضها</string>

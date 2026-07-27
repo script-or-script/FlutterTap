@@ -9,8 +9,9 @@
     <string name="status_backend_kernelsu">Gestionnaire : KernelSU</string>
     <string name="status_backend_apatch">Gestionnaire : APatch</string>
     <string name="status_backend_unknown">Gestionnaire : inconnu</string>
-    <string name="status_module_installed">Module FlutterTap : installé</string>
-    <string name="status_module_not_installed">Module FlutterTap : non installé</string>
+    <string name="status_module_active">Module FlutterTap : installé et activé</string>
+    <string name="status_module_inactive">Module FlutterTap : non installé ou désactivé</string>
+    <string name="status_grant_root_button">Accorder l\'accès root</string>
 
     <string name="proxy_title">Proxy</string>
     <string name="proxy_master_switch">Activer l\'interception</string>
@@ -20,6 +21,7 @@
     <string name="proxy_saved_confirmation">Configuration enregistrée</string>
     <string name="proxy_invalid_ip">Saisissez une adresse IPv4 valide</string>
     <string name="proxy_invalid_port">Saisissez un port entre 1 et 65535</string>
+    <string name="proxy_burp_invisible_note">Pensez à activer l\'"Invisible Proxying" dans les paramètres de l\'écouteur proxy de Burp Suite.</string>
 
     <string name="apps_title">Apps ciblées</string>
     <string name="apps_subtitle">Choisissez les apps installées que FlutterTap doit intercepter</string>

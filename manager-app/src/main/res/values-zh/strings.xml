@@ -9,8 +9,9 @@
     <string name="status_backend_kernelsu">管理器：KernelSU</string>
     <string name="status_backend_apatch">管理器：APatch</string>
     <string name="status_backend_unknown">管理器：未知</string>
-    <string name="status_module_installed">FlutterTap 模块：已安装</string>
-    <string name="status_module_not_installed">FlutterTap 模块：未安装</string>
+    <string name="status_module_active">FlutterTap 模块：已安装并已启用</string>
+    <string name="status_module_inactive">FlutterTap 模块：未安装或已禁用</string>
+    <string name="status_grant_root_button">授予 Root 权限</string>
 
     <string name="proxy_title">代理</string>
     <string name="proxy_master_switch">启用拦截</string>
@@ -20,6 +21,7 @@
     <string name="proxy_saved_confirmation">配置已保存</string>
     <string name="proxy_invalid_ip">请输入有效的 IPv4 地址</string>
     <string name="proxy_invalid_port">请输入 1 到 65535 之间的端口</string>
+    <string name="proxy_burp_invisible_note">别忘了在 Burp Suite 的代理监听器设置中启用"Invisible Proxying"。</string>
 
     <string name="apps_title">目标应用</string>
     <string name="apps_subtitle">选择 FlutterTap 需要拦截的已安装应用</string>

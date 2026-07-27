@@ -9,8 +9,9 @@
     <string name="status_backend_kernelsu">मैनेजर: KernelSU</string>
     <string name="status_backend_apatch">मैनेजर: APatch</string>
     <string name="status_backend_unknown">मैनेजर: अज्ञात</string>
-    <string name="status_module_installed">FlutterTap मॉड्यूल: इंस्टॉल है</string>
-    <string name="status_module_not_installed">FlutterTap मॉड्यूल: इंस्टॉल नहीं है</string>
+    <string name="status_module_active">FlutterTap मॉड्यूल: इंस्टॉल और सक्षम है</string>
+    <string name="status_module_inactive">FlutterTap मॉड्यूल: इंस्टॉल नहीं है या अक्षम है</string>
+    <string name="status_grant_root_button">रूट एक्सेस प्रदान करें</string>
 
     <string name="proxy_title">प्रॉक्सी</string>
     <string name="proxy_master_switch">हुकिंग सक्षम करें</string>
@@ -20,6 +21,7 @@
     <string name="proxy_saved_confirmation">कॉन्फ़िगरेशन सहेजा गया</string>
     <string name="proxy_invalid_ip">एक मान्य IPv4 पता दर्ज करें</string>
     <string name="proxy_invalid_port">1 से 65535 के बीच एक पोर्ट दर्ज करें</string>
+    <string name="proxy_burp_invisible_note">Burp Suite की प्रॉक्सी लिसनर सेटिंग्स में "Invisible Proxying" सक्षम करना न भूलें।</string>
 
     <string name="apps_title">लक्ष्य ऐप्स</string>
     <string name="apps_subtitle">चुनें कि FlutterTap को किन इंस्टॉल किए गए ऐप्स को इंटरसेप्ट करना चाहिए</string>

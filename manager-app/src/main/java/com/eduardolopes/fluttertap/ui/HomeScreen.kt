@@ -47,6 +47,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.appcompat.app.AppCompatDelegate
 import com.eduardolopes.fluttertap.R
 import com.eduardolopes.fluttertap.data.AppInfo
@@ -100,6 +101,15 @@ fun HomeScreen(onLanguageSelected: (String?) -> Unit) {
         }
     }
 
+    fun retryRoot() {
+        scope.launch {
+            status = withContext(Dispatchers.IO) { RootManager.requestRoot() }
+            if (status?.granted == true) {
+                config = withContext(Dispatchers.IO) { RootManager.readConfig() }
+            }
+        }
+    }
+
     Scaffold(
         topBar = { TopAppBar(title = { Text(stringResource(R.string.app_name)) }) },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -117,7 +127,7 @@ fun HomeScreen(onLanguageSelected: (String?) -> Unit) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             item { LanguageCard(onLanguageSelected = onLanguageSelected) }
-            item { StatusCard(status!!) }
+            item { StatusCard(status = status!!, onRetryRoot = ::retryRoot) }
             item { ProxyCard(config = config, onSave = { newConfig -> persist(newConfig, notify = true) }) }
             item {
                 AppsCard(
@@ -137,7 +147,7 @@ fun HomeScreen(onLanguageSelected: (String?) -> Unit) {
 }
 
 @Composable
-private fun StatusCard(status: RootStatus) {
+private fun StatusCard(status: RootStatus, onRetryRoot: () -> Unit) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(stringResource(R.string.status_title), style = MaterialTheme.typography.titleMedium)
@@ -158,10 +168,14 @@ private fun StatusCard(status: RootStatus) {
                 )
                 Text(
                     stringResource(
-                        if (status.moduleInstalled) R.string.status_module_installed
-                        else R.string.status_module_not_installed
+                        if (status.moduleActive) R.string.status_module_active
+                        else R.string.status_module_inactive
                     )
                 )
+            } else {
+                TextButton(onClick = onRetryRoot, modifier = Modifier.padding(top = 4.dp)) {
+                    Text(stringResource(R.string.status_grant_root_button))
+                }
             }
         }
     }
@@ -233,6 +247,13 @@ private fun ProxyCard(config: ConfigData, onSave: (ConfigData) -> Unit) {
             ) {
                 Text(stringResource(R.string.proxy_save_button))
             }
+
+            Text(
+                stringResource(R.string.proxy_burp_invisible_note),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
         }
     }
 }
