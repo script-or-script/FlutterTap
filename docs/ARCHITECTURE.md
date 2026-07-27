@@ -132,10 +132,11 @@ validation log) still installs hooks successfully -- `verify_cert_chain` and
 `GetSockAddr` both "resolve" and the TLS bypass works -- but the socket
 rewrite never fires for its real network requests, even after forcing a
 brand new connection (confirmed by toggling Wi-Fi off/on before retrying, to
-rule out a reused keep-alive connection). Two other apps (one tested by the
-developer, one a real production app tested independently by the project's
-author against their own client's app) work end-to-end with the exact same
-code, including full captured, decrypted traffic.
+rule out a reused keep-alive connection). Three other scenarios (two public
+training apps tested by the developer, and a real production app tested
+independently by the project's author against their own client's app) work
+end-to-end with the exact same code, including full captured, decrypted
+traffic.
 
 The likely explanation: `GetSockAddr`'s address is derived by walking forward
 from `Socket_CreateConnect` and taking the target of the *2nd* `bl`
@@ -204,19 +205,34 @@ as unrestricted root, via a tiny length-prefixed protocol over the socket
 
 A Jetpack Compose app (`manager-app/`) that:
 
-- Lists launchable apps on the device and lets the user pick which ones
-  FlutterTap should hook (checkbox list with search).
+- Lists launchable apps on the device, plus an opt-in toggle to also show
+  system apps (`AppRepository.listSystemOnlyApps`, for OEM/system components
+  without a launcher icon that can still embed a Flutter engine), and lets
+  the user pick which ones FlutterTap should hook (checkbox list with search
+  and per-app icons; already-selected apps float to the top of the list).
 - Edits the proxy IP/port and a master enable switch.
-- Detects root / the active backend (Magisk/KernelSU/APatch) and whether the
-  module is installed, for display only -- this has no effect on whether the
-  module itself works, since all three implement the same Zygisk API.
+- Detects root / the active root manager (Magisk/KernelSU/APatch), and shows
+  a single combined flag for whether the module is both installed *and*
+  enabled (`RootManager.queryStatus` checks for the module directory AND the
+  absence of its `disable` marker file -- the same convention all three root
+  solutions use) -- for display only, this has no effect on whether the
+  module itself works, since all three implement the same Zygisk API. If root
+  wasn't granted (e.g. the user dismissed the automatic prompt), a button
+  retries the request (`RootManager.requestRoot`, closes any cached non-root
+  shell and asks again).
 - Writes `config.json` through a root shell (`libsu`), base64-encoded so no
   part of the JSON ever needs shell escaping.
-- Ships English, Portuguese (Brazil) and Chinese strings, switchable in-app
-  via `AppCompatDelegate.setApplicationLocales` (works without
-  `AppCompatActivity`, backed by the `AppLocalesMetadataHolderService` entry
-  in `AndroidManifest.xml`, per AndroidX's own documented approach for
-  non-AppCompat activities).
+- Ships English, Portuguese (Brazil), Chinese, Spanish, Arabic, French and
+  Hindi strings, switchable in-app via `AppCompatDelegate.setApplicationLocales`.
+  `MainActivity` extends `AppCompatActivity` (not the plain `ComponentActivity`
+  Compose activities default to) specifically for this: AppCompatDelegate's
+  per-app language backport only auto-recreates the activity with the new
+  locale on API <33 when it does. The `Theme.FlutterTap` style also has to
+  descend from `Theme.AppCompat` for the same reason -- `AppCompatActivity`
+  throws on `setContentView` otherwise. `FlutterTapApplication.onCreate` is
+  where libsu's one-time shell builder is configured, not `MainActivity`,
+  since the locale-triggered activity recreate would otherwise re-run it and
+  crash ("the main shell was already created").
 - Always derives its color scheme from `isSystemInDarkTheme()` (plus a
   `values-night/themes.xml` for the window background/status bar before
   Compose even loads), so it can't end up showing a light background while

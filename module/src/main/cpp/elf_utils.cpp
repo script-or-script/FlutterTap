@@ -70,7 +70,9 @@ bool find_module_by_suffix(const char *name_suffix, MappedModule &out) {
     // when the APK was built with extractNativeLibs=false and the library is
     // mapped directly out of the APK's zip rather than as its own file --
     // bionic still reports dlpi_addr/dlpi_name correctly either way.
-    FindModuleCtx ctx{name_suffix, strlen(name_suffix)};
+    FindModuleCtx ctx;
+    ctx.suffix = name_suffix;
+    ctx.suffixLen = strlen(name_suffix);
     dl_iterate_phdr(findModuleCallback, &ctx);
     if (!ctx.found) return false;
 
@@ -105,14 +107,9 @@ bool parse_elf_segments(const MappedModule &mod, ElfSegments &out) {
     };
 
     uint64_t phoff = ehdr.e_phoff;
-    uint64_t shoff = ehdr.e_shoff;
     uint16_t phentsize = ehdr.e_phentsize;
     uint16_t phnum = ehdr.e_phnum;
 
-    if (shoff == 0 && fd >= 0) {
-        ft_log_info("elf: shoff is 0, falling back to file read");
-        shoff = readEhdrFromFile().e_shoff;
-    }
     if (phentsize != sizeof(Elf64_Phdr)) {
         ft_log_warn("elf: unexpected e_phentsize=%u, assuming %zu", phentsize, sizeof(Elf64_Phdr));
         phentsize = sizeof(Elf64_Phdr);
@@ -181,6 +178,5 @@ bool parse_elf_segments(const MappedModule &mod, ElfSegments &out) {
     }
 
     if (fd >= 0) close(fd);
-    (void)shoff; // kept for parity with the original script; not needed further here
     return true;
 }

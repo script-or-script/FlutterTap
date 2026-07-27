@@ -26,9 +26,13 @@ struct MappedModule {
 bool find_module_by_suffix(const char *name_suffix, MappedModule &out);
 
 struct ElfSegments {
-    // First PT_LOAD with p_vaddr == 0 (rodata / everything before .text).
+    // Size of the first PT_LOAD segment.
     uint64_t rodata_memsz = 0;
-    // First PT_LOAD with p_vaddr != 0 (.text and onwards).
+    // vaddr/size of the first PT_LOAD segment flagged executable (PF_X). In
+    // the classic two-segment layout this is a separate, later PT_LOAD; in
+    // newer lld layouts that merge rodata and .text into one R+E PT_LOAD,
+    // it's the very same segment as rodata_memsz above -- see
+    // parse_elf_segments() in elf_utils.cpp.
     uint64_t text_vaddr = 0;
     uint64_t text_memsz = 0;
     // PT_GNU_RELRO, if present.

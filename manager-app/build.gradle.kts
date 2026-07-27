@@ -44,16 +44,13 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.activity:activity-compose:1.9.3")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0") // per-app language (AppCompatDelegate.setApplicationLocales)
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     // Root shell access to read/write /data/adb/fluttertap/config.json.
     implementation("com.github.topjohnwu.libsu:core:6.0.0")
-    implementation("com.github.topjohnwu.libsu:io:6.0.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

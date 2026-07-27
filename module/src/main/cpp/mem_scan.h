@@ -28,7 +28,12 @@ struct BytePattern {
     std::vector<uint8_t> mask;
 };
 
-// Parses patterns like "?9 ?? ?? ?0 29 ?? ?? 91" or "73 73 6C 5F 63 6C 69 65 6E 74 00".
+// Parses space-separated hex byte patterns, e.g. "73 73 6C 5F 63 6C 69 65 6E 74 00"
+// for a literal string match, or "4? ?? B8" using "??"/nibble wildcards. Kept
+// general-purpose like the original script's AOB scanner, even though the
+// current callers (addr_resolver.cpp) only need literal string matches with
+// no wildcards -- the register-agnostic Capstone scan replaced the wildcarded
+// instruction-byte patterns the original script used.
 BytePattern compile_pattern(const std::string &pattern_str);
 
 // Returns every match address in [start, start+size) in ascending order.

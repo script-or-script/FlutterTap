@@ -1,6 +1,7 @@
 // FlutterTap manager app -- by Eduardo Lopes
 package com.eduardolopes.fluttertap.ui
 
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -48,7 +49,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.appcompat.app.AppCompatDelegate
 import com.eduardolopes.fluttertap.R
 import com.eduardolopes.fluttertap.data.AppInfo
 import com.eduardolopes.fluttertap.data.AppRepository

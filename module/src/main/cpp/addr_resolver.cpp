@@ -4,7 +4,6 @@
 #include <capstone/capstone.h>
 
 #include <cstring>
-#include <string>
 
 #include "log.h"
 #include "mem_scan.h"
@@ -256,8 +255,7 @@ uintptr_t walkCallCountX64(csh handle, uintptr_t funcAddr, int targetCount) {
 
 } // namespace
 
-bool resolve_addresses(const MappedModule &mod, const ElfSegments &segs, const std::string &package_name,
-                       ResolvedAddrs &out) {
+bool resolve_addresses(const MappedModule &mod, const ElfSegments &segs, ResolvedAddrs &out) {
     if (segs.rodata_memsz == 0) {
         ft_log_warn("resolver: rodata size is 0, cannot scan");
         return false;
@@ -290,7 +288,6 @@ bool resolve_addresses(const MappedModule &mod, const ElfSegments &segs, const s
         closeHandles(cs);
         return false;
     }
-    (void)package_name; // no longer needed -- see resolveVerifyCertChainArm64's comment
     verifyCertChain = resolveVerifyCertChainArm64(cs.arm64, mod, segs, sslClientAddr);
 #elif defined(__x86_64__)
     if (!cs.x86_ok) {

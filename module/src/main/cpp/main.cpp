@@ -48,7 +48,7 @@ void runHookPipeline(const std::string &processName, const ModuleConfig &cfg) {
     }
 
     ResolvedAddrs addrs;
-    if (!resolve_addresses(flutterMod, segs, processName, addrs)) {
+    if (!resolve_addresses(flutterMod, segs, addrs)) {
         ft_log_error("%s: address resolution failed, hooks not installed", processName.c_str());
         return;
     }
