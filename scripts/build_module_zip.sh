@@ -20,6 +20,8 @@ mkdir -p "$STAGE_DIR/zygisk"
 cp module/template/module.prop "$STAGE_DIR/"
 cp module/template/customize.sh "$STAGE_DIR/"
 cp module/template/uninstall.sh "$STAGE_DIR/"
+cp module/template/action.sh "$STAGE_DIR/"
+chmod 755 "$STAGE_DIR/action.sh"
 
 find_so() {
   local abi="$1"

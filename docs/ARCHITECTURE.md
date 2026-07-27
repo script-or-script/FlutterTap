@@ -173,6 +173,24 @@ is read through the Zygisk **companion process** (`companion.cpp`), which runs
 as unrestricted root, via a tiny length-prefixed protocol over the socket
 `Api::connectCompanion()` provides.
 
+## Module install scripts (`module/template/`)
+
+Standard Magisk module layout, understood the same way by Magisk, KernelSU
+(including KernelSU Next), SukiSu Ultra and APatch:
+
+- `module.prop` -- id/name/version/description shown in the module manager.
+- `customize.sh` -- runs at install time; writes the default `config.json` if
+  one doesn't already exist (see above), and leaves an existing one alone.
+- `uninstall.sh` -- deliberately does nothing to `/data/adb/fluttertap`, so
+  reinstalling the module later restores the user's settings exactly as they
+  left them.
+- `action.sh` -- runs on demand when the user taps the "Action" button next
+  to FlutterTap in the module manager's list (present automatically whenever
+  a module ships this file, no extra `module.prop` flag needed). Just opens
+  the manager app (`am start -n com.eduardolopes.fluttertap/.MainActivity`),
+  since that's the only settings surface FlutterTap has -- there's nothing
+  else useful to run on demand.
+
 ## Third-party code and why each patch exists
 
 - **Capstone 5.0.9** (BSD-3), vendored as a git submodule, built with only
