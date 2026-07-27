@@ -26,6 +26,8 @@
     <string name="apps_search_hint">Search apps</string>
     <string name="apps_selected_count">%d app(s) selected</string>
     <string name="apps_empty">No apps found</string>
+    <string name="apps_show_system">Show system apps</string>
+    <string name="apps_system_badge">SYSTEM</string>
 
     <string name="language_title">Language</string>
     <string name="language_system">Follow system</string>

@@ -26,6 +26,8 @@
     <string name="apps_search_hint">搜索应用</string>
     <string name="apps_selected_count">已选择 %d 个应用</string>
     <string name="apps_empty">未找到应用</string>
+    <string name="apps_show_system">显示系统应用</string>
+    <string name="apps_system_badge">系统</string>
 
     <string name="language_title">语言</string>
     <string name="language_system">跟随系统</string>

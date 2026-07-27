@@ -43,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.eduardolopes.fluttertap.R
 import com.eduardolopes.fluttertap.data.AppInfo
@@ -64,14 +65,20 @@ fun HomeScreen(onLanguageSelected: (String?) -> Unit) {
 
     var status by remember { mutableStateOf<RootStatus?>(null) }
     var config by remember { mutableStateOf(ConfigData.default()) }
-    var apps by remember { mutableStateOf<List<AppInfo>>(emptyList()) }
+    var launchableApps by remember { mutableStateOf<List<AppInfo>>(emptyList()) }
+    var systemOnlyApps by remember { mutableStateOf<List<AppInfo>>(emptyList()) }
+    var showSystemApps by rememberSaveable { mutableStateOf(false) }
     var loading by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
-        val loadedApps = withContext(Dispatchers.Default) { AppRepository.listLaunchableApps(context) }
+        val loadedLaunchable = withContext(Dispatchers.Default) { AppRepository.listLaunchableApps(context) }
+        val loadedSystemOnly = withContext(Dispatchers.Default) {
+            AppRepository.listSystemOnlyApps(context, loadedLaunchable.map { it.packageName }.toSet())
+        }
         val loadedStatus = withContext(Dispatchers.IO) { RootManager.queryStatus() }
         val loadedConfig = withContext(Dispatchers.IO) { RootManager.readConfig() }
-        apps = loadedApps
+        launchableApps = loadedLaunchable
+        systemOnlyApps = loadedSystemOnly
         status = loadedStatus
         config = loadedConfig
         loading = false
@@ -111,8 +118,10 @@ fun HomeScreen(onLanguageSelected: (String?) -> Unit) {
             item { LanguageCard(onLanguageSelected = onLanguageSelected) }
             item {
                 AppsCard(
-                    apps = apps,
+                    apps = if (showSystemApps) launchableApps + systemOnlyApps else launchableApps,
                     selected = config.targetPackages,
+                    showSystemApps = showSystemApps,
+                    onToggleShowSystemApps = { showSystemApps = it },
                     onToggle = { pkg, checked ->
                         val newSet = if (checked) config.targetPackages + pkg else config.targetPackages - pkg
                         persist(config.copy(targetPackages = newSet), notify = false)
@@ -283,11 +292,19 @@ private fun LanguageCard(onLanguageSelected: (String?) -> Unit) {
 private fun AppsCard(
     apps: List<AppInfo>,
     selected: Set<String>,
+    showSystemApps: Boolean,
+    onToggleShowSystemApps: (Boolean) -> Unit,
     onToggle: (String, Boolean) -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
-    val filtered = remember(apps, query) {
-        if (query.isBlank()) apps else apps.filter { it.label.contains(query, ignoreCase = true) }
+    val filtered = remember(apps, query, selected) {
+        val base = if (query.isBlank()) apps else apps.filter { it.label.contains(query, ignoreCase = true) }
+        // Selected apps float to the top so the user doesn't have to scroll to find them
+        // again; alphabetical order is preserved within each group.
+        base.sortedWith(
+            compareByDescending<AppInfo> { selected.contains(it.packageName) }
+                .thenBy { it.label.lowercase() }
+        )
     }
 
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -309,6 +326,15 @@ private fun AppsCard(
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             )
 
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(stringResource(R.string.apps_show_system), style = MaterialTheme.typography.bodyMedium)
+                Switch(checked = showSystemApps, onCheckedChange = onToggleShowSystemApps)
+            }
+
             if (filtered.isEmpty()) {
                 Text(
                     stringResource(R.string.apps_empty),
@@ -326,11 +352,31 @@ private fun AppsCard(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
-                            Column(Modifier.padding(vertical = 4.dp)) {
-                                Text(app.label, style = MaterialTheme.typography.bodyLarge)
+                            Column(Modifier.padding(vertical = 4.dp).weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        app.label,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false),
+                                    )
+                                    if (app.isSystemApp) {
+                                        Text(
+                                            stringResource(R.string.apps_system_badge),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            modifier = Modifier.padding(start = 6.dp),
+                                        )
+                                    }
+                                }
                                 Text(
                                     app.packageName,
                                     style = MaterialTheme.typography.bodySmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }

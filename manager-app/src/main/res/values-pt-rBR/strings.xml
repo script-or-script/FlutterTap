@@ -26,6 +26,8 @@
     <string name="apps_search_hint">Buscar apps</string>
     <string name="apps_selected_count">%d app(s) selecionado(s)</string>
     <string name="apps_empty">Nenhum app encontrado</string>
+    <string name="apps_show_system">Mostrar apps de sistema</string>
+    <string name="apps_system_badge">SISTEMA</string>
 
     <string name="language_title">Idioma</string>
     <string name="language_system">Seguir sistema</string>
