@@ -9,8 +9,9 @@ enum class RootBackend { MAGISK, KERNELSU, APATCH, UNKNOWN }
 data class RootStatus(
     val granted: Boolean,
     val backend: RootBackend,
-    /** True only when the module directory exists AND has no `disable` marker file. */
-    val moduleActive: Boolean,
+    val moduleInstalled: Boolean,
+    /** Only meaningful when [moduleInstalled] is true: absence of the `disable` marker file. */
+    val moduleEnabled: Boolean,
 )
 
 /** All root shell I/O for FlutterTap: root/backend detection and config.json read/write. */
@@ -22,7 +23,9 @@ object RootManager {
     // Runs on a background thread; callers are expected to launch it off the main thread.
     fun queryStatus(): RootStatus {
         val granted = Shell.getShell().isRoot
-        if (!granted) return RootStatus(granted = false, backend = RootBackend.UNKNOWN, moduleActive = false)
+        if (!granted) {
+            return RootStatus(granted = false, backend = RootBackend.UNKNOWN, moduleInstalled = false, moduleEnabled = false)
+        }
 
         val backend = when {
             exists("/data/adb/ksu") || Shell.cmd("ksud --version").exec().isSuccess -> RootBackend.KERNELSU
@@ -30,8 +33,9 @@ object RootManager {
             Shell.cmd("magisk -v").exec().isSuccess -> RootBackend.MAGISK
             else -> RootBackend.UNKNOWN
         }
-        val moduleActive = exists(MODULE_DIR) && !exists("$MODULE_DIR/disable")
-        return RootStatus(granted = true, backend = backend, moduleActive = moduleActive)
+        val moduleInstalled = exists(MODULE_DIR)
+        val moduleEnabled = moduleInstalled && !exists("$MODULE_DIR/disable")
+        return RootStatus(granted = true, backend = backend, moduleInstalled = moduleInstalled, moduleEnabled = moduleEnabled)
     }
 
     /**

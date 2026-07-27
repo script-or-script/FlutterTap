@@ -9,8 +9,10 @@
     <string name="status_backend_kernelsu">Manager: KernelSU</string>
     <string name="status_backend_apatch">Manager: APatch</string>
     <string name="status_backend_unknown">Manager: unknown</string>
-    <string name="status_module_active">FlutterTap module: installed and enabled</string>
-    <string name="status_module_inactive">FlutterTap module: not installed or disabled</string>
+    <string name="status_module_installed_label">Module installed</string>
+    <string name="status_module_not_installed_label">Module not installed</string>
+    <string name="status_module_enabled_label">Enabled</string>
+    <string name="status_module_disabled_label">Disabled</string>
     <string name="status_grant_root_button">Grant root access</string>
 
     <string name="proxy_title">Proxy</string>

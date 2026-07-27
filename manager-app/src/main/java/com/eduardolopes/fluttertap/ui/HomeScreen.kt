@@ -3,17 +3,21 @@ package com.eduardolopes.fluttertap.ui
 
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Search
@@ -44,6 +48,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -166,11 +171,19 @@ private fun StatusCard(status: RootStatus, onRetryRoot: () -> Unit) {
                         }
                     )
                 )
-                Text(
-                    stringResource(
-                        if (status.moduleActive) R.string.status_module_active
-                        else R.string.status_module_inactive
-                    )
+                StatusBullet(
+                    text = stringResource(
+                        if (status.moduleInstalled) R.string.status_module_installed_label
+                        else R.string.status_module_not_installed_label
+                    ),
+                    positive = status.moduleInstalled,
+                )
+                StatusBullet(
+                    text = stringResource(
+                        if (status.moduleEnabled) R.string.status_module_enabled_label
+                        else R.string.status_module_disabled_label
+                    ),
+                    positive = status.moduleEnabled,
                 )
             } else {
                 TextButton(onClick = onRetryRoot, modifier = Modifier.padding(top = 4.dp)) {
@@ -178,6 +191,22 @@ private fun StatusCard(status: RootStatus, onRetryRoot: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+private val StatusPositiveColor = Color(0xFF43A047)
+private val StatusNegativeColor = Color(0xFFE53935)
+
+@Composable
+private fun StatusBullet(text: String, positive: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .background(color = if (positive) StatusPositiveColor else StatusNegativeColor, shape = CircleShape)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text)
     }
 }
 

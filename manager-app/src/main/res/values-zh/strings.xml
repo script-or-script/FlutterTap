@@ -9,8 +9,10 @@
     <string name="status_backend_kernelsu">管理器：KernelSU</string>
     <string name="status_backend_apatch">管理器：APatch</string>
     <string name="status_backend_unknown">管理器：未知</string>
-    <string name="status_module_active">FlutterTap 模块：已安装并已启用</string>
-    <string name="status_module_inactive">FlutterTap 模块：未安装或已禁用</string>
+    <string name="status_module_installed_label">模块已安装</string>
+    <string name="status_module_not_installed_label">模块未安装</string>
+    <string name="status_module_enabled_label">已启用</string>
+    <string name="status_module_disabled_label">已禁用</string>
     <string name="status_grant_root_button">授予 Root 权限</string>
 
     <string name="proxy_title">代理</string>

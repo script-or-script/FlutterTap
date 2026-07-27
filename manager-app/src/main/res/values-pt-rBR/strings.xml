@@ -9,8 +9,10 @@
     <string name="status_backend_kernelsu">Gerenciador: KernelSU</string>
     <string name="status_backend_apatch">Gerenciador: APatch</string>
     <string name="status_backend_unknown">Gerenciador: desconhecido</string>
-    <string name="status_module_active">Módulo FlutterTap: instalado e habilitado</string>
-    <string name="status_module_inactive">Módulo FlutterTap: não instalado ou desabilitado</string>
+    <string name="status_module_installed_label">Módulo instalado</string>
+    <string name="status_module_not_installed_label">Módulo não instalado</string>
+    <string name="status_module_enabled_label">Habilitado</string>
+    <string name="status_module_disabled_label">Desabilitado</string>
     <string name="status_grant_root_button">Conceder acesso root</string>
 
     <string name="proxy_title">Proxy</string>

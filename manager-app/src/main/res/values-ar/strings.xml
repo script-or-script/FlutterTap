@@ -9,8 +9,10 @@
     <string name="status_backend_kernelsu">المدير: KernelSU</string>
     <string name="status_backend_apatch">المدير: APatch</string>
     <string name="status_backend_unknown">المدير: غير معروف</string>
-    <string name="status_module_active">وحدة FlutterTap: مثبَّتة ومفعَّلة</string>
-    <string name="status_module_inactive">وحدة FlutterTap: غير مثبَّتة أو معطَّلة</string>
+    <string name="status_module_installed_label">الوحدة مثبَّتة</string>
+    <string name="status_module_not_installed_label">الوحدة غير مثبَّتة</string>
+    <string name="status_module_enabled_label">مفعَّلة</string>
+    <string name="status_module_disabled_label">معطَّلة</string>
     <string name="status_grant_root_button">منح صلاحية الروت</string>
 
     <string name="proxy_title">البروكسي</string>
