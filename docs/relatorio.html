@@ -265,10 +265,9 @@ endereços "resolvem" e os hooks são instalados normalmente, mas a reescrita do
 dispara nas requisições reais do app (confirmado inclusive forçando uma conexão totalmente nova, alternando
 o Wi-Fi antes de tentar de novo — descartando a hipótese de reaproveitamento de uma conexão já existente).
 <br><br>
-Enquanto isso, o mecanismo funcionou de ponta a ponta, com tráfego real capturado, em <strong>dois outros
-apps completamente independentes</strong>: o Reqable (testado por mim, com captura completa no Burp) e o
-app da Nike de um cliente real (testado de forma independente pelo Eduardo, no próprio celular, confirmando
-que o módulo já está em uso prático real).
+Enquanto isso, o mecanismo já havia funcionado de ponta a ponta, com tráfego real capturado, contra um app
+de produção real de um cliente (testado de forma independente por Eduardo, no próprio celular — seção 10.4)
+— evidência de que o problema é específico desse build do DVFA, não da lógica do módulo em si.
 <br><br>
 A explicação mais provável: a resolução do <code>GetSockAddr</code> depende de contar quantas instruções
 <code>bl</code> existem a partir do <code>Socket_CreateConnect</code> e pegar o alvo da 2ª chamada (mesma
@@ -280,8 +279,11 @@ formato de prólogo, escreve a família do endereço no offset 0, zera um buffer
 Essa investigação não foi levada adiante: seria necessário reverter todo o grafo de chamadas do
 <code>Socket_CreateConnect</code> desse build específico, sem garantia de solução rápida, e esse app de
 teste não é crítico para o projeto — a decisão (após conversa) foi não arriscar mexer na lógica de hook
-compartilhada por causa de um único app de teste, e manter o código no estado já validado com o Reqable e
-com o app da Nike.
+compartilhada por causa de um único app de teste.
+<br><br>
+<strong>Encaminhamento:</strong> o DVFA foi então descartado como app de demonstração e substituído por dois
+outros apps de treinamento públicos, ambos confirmados funcionando de ponta a ponta sem nenhuma mudança de
+código adicional — ver seção 10.
 </div>
 
 <h2 class="page-break">7. Estrutura do projeto</h2>
@@ -323,64 +325,133 @@ interceptar é sempre manual, feita pelo usuário através do app gerenciador.
 
 <h2 class="page-break">10. Validação em dispositivo real</h2>
 <p>
-Após o desenvolvimento inicial, o módulo foi testado em um aparelho físico já disponível: um
-<strong>OnePlus 5, Android 10, arquitetura arm64-v8a</strong>, com root via Magisk (fork "Kitsune Magisk"
-v27.2) e Zygisk fornecido pelo módulo <strong>NeoZygisk</strong> (já que esse fork não usa o Zygisk nativo).
-O Burp Suite já estava rodando na máquina do desenvolvedor, escutando em <code>192.168.15.13:8083</code>,
-na mesma rede Wi-Fi do aparelho.
+O módulo foi testado em um aparelho físico: um <strong>OnePlus 5, Android 10, arquitetura arm64-v8a</strong>,
+com root via Magisk (fork "Kitsune Magisk" v27.2) e Zygisk fornecido pelo módulo <strong>NeoZygisk</strong>
+(já que esse fork não usa o Zygisk nativo). O Burp Suite já estava rodando na máquina do desenvolvedor,
+escutando em <code>192.168.15.13:8083</code>, na mesma rede Wi-Fi do aparelho.
 </p>
 
-<h3>10.1 Passos executados</h3>
+<h3>10.1 Apps de demonstração escolhidos</h3>
+<p>
+Para ter evidências reais sem usar nenhum app de cliente nas capturas, foram usados dois apps de treinamento
+de segurança <strong>públicos e oficiais</strong>, ambos em Flutter:
+</p>
+<table>
+<tr><th>App</th><th>Autor / licença</th><th>Por que serve como demonstração</th></tr>
+<tr>
+  <td><strong>Ostorlab Insecure Android App</strong><br><code>github.com/Ostorlab/ostorlab_insecure_android_app</code></td>
+  <td>Ostorlab (empresa de segurança mobile), Apache-2.0</td>
+  <td>Módulo Flutter com um teste dedicado de tráfego TLS (<code>TLSTraffic</code>), fazendo uma requisição
+      HTTPS real para <code>ostorlab.co</code></td>
+</tr>
+<tr>
+  <td><strong>VulnApp</strong><br><code>github.com/anasachoury/VulnApp</code></td>
+  <td>anasachoury</td>
+  <td>App Flutter simples mapeado no OWASP Mobile Top 10, com uma chamada de rede real (HTTP, para
+      <code>httpbin.org</code>)</td>
+</tr>
+</table>
+<p>
+Nenhum dos dois tinha um APK pronto (nem em Releases, nem em artefatos de CI) — foi necessário instalar o
+Flutter SDK e compilar os dois a partir do código-fonte. Ambos também estavam com a permissão
+<code>android.permission.INTERNET</code> faltando no manifesto (o mesmo tipo de descuido encontrado
+antes no DVFA e no <code>burptestapp</code> — aparentemente comum nesse tipo de app de treinamento pequeno)
+e precisaram de pequenos ajustes de dependências desatualizadas (ver seção 10.5) para compilar com o
+toolchain atual. Nenhuma mudança foi feita na lógica de vulnerabilidade/teste dos apps em si.
+</p>
+
+<h3>10.2 Passos executados</h3>
 <ol>
   <li>Empacotamento do módulo (<code>scripts/build_module_zip.sh</code>) e instalação via
       <code>magisk --install-module</code>.</li>
-  <li>Escrita direta do <code>config.json</code> apontando para o proxy real e para dois apps Flutter já
-      instalados no aparelho: <code>com.pentestkit.burptestapp</code> (um app dedicado a esse tipo de
-      teste) e <code>com.reqable.android</code> (uma ferramenta de depuração de rede real).</li>
+  <li>Compilação dos dois apps de demonstração a partir do código-fonte (Flutter SDK instalado localmente)
+      e instalação via <code>adb install</code>.</li>
+  <li>Escrita do <code>config.json</code> apontando para o proxy real e para o pacote de cada app, um de
+      cada vez.</li>
   <li>Reinicialização do aparelho para o Zygisk carregar o módulo.</li>
-  <li>Abertura de cada app e acompanhamento do log do módulo (<code>adb logcat</code>) e do histórico de
-      proxy do Burp.</li>
+  <li>Abertura de cada app, interação com a funcionalidade que dispara a chamada de rede, e acompanhamento
+      do log do módulo (<code>adb logcat</code>) e do histórico de proxy do Burp.</li>
 </ol>
 
-<h3>10.2 Resultado</h3>
+<h3>10.3 Resultado</h3>
 <div class="ok">
-<strong>Sucesso confirmado com tráfego real, na primeira tentativa.</strong> O log do módulo mostrou a
-sequência completa esperada para os dois apps: <code>libflutter.so</code> carregada → endereços de
-<code>verify_cert_chain</code> e <code>GetSockAddr</code> resolvidos corretamente via Capstone → hooks
-instalados → <code>sockaddr</code> reescrito a cada nova conexão para <code>192.168.15.13:8083</code>.
+<strong>Sucesso confirmado com tráfego real nos dois apps, sem nenhuma mudança de código entre eles.</strong>
+O log do módulo mostrou a sequência completa esperada em ambos: <code>libflutter.so</code> carregada →
+endereços de <code>verify_cert_chain</code> e <code>GetSockAddr</code> resolvidos corretamente via Capstone
+→ hooks instalados → <code>sockaddr</code> reescrito a cada nova conexão para <code>192.168.15.13:8083</code>.
 <br><br>
-No app <code>com.reqable.android</code>, o Burp capturou e decodificou de verdade requisições HTTPS reais
-(para <code>app.reqable.com</code> e <code>event.reqable.com</code>, incluindo corpo JSON com informações
-do dispositivo e da versão do app) — <strong>sem precisar instalar nenhum certificado no aparelho</strong>,
+No <strong>Ostorlab Insecure App</strong>, ao acionar o teste <code>TLSTraffic</code>, o Burp capturou e
+decodificou de verdade uma requisição HTTPS para <code>https://ostorlab.co/</code> (resposta HTTP/2 200 OK
+completa, com o HTML da página) — <strong>sem precisar instalar nenhum certificado no aparelho</strong>,
 exatamente o comportamento esperado do bypass de verificação de certificado.
+<br><br>
+No <strong>VulnApp</strong>, ao tocar em "Call Insecure API" na tela de perfil, o Burp capturou a requisição
+HTTP para <code>http://httpbin.org/get</code> — confirmando que o redirecionamento de tráfego funciona
+independente de a conexão ser HTTPS (com bypass de certificado) ou HTTP simples.
 </div>
-
-<h3>10.3 Achado durante o teste (não relacionado ao módulo)</h3>
 <div class="warn">
-No app <code>com.pentestkit.burptestapp</code>, todas as requisições falhavam com
-<code>SocketException: Permission denied, errno = 13</code>, independente do endereço de destino. A
-investigação (<code>dumpsys package</code>) mostrou que esse app específico <strong>não declara a
-permissão <code>android.permission.INTERNET</code></strong> no seu manifesto — por isso nenhuma conexão de
-rede é possível para ele, com ou sem o FlutterTap. Não é um problema do módulo (que resolveu os endereços e
-instalou os hooks normalmente nesse app também), e sim uma limitação do app de teste em si.
+<strong>Observação sobre o login do VulnApp:</strong> ao testar, não apareceu nenhuma requisição de rede no
+momento do login. Investigando o código-fonte (<code>lib/screens/login_screen.dart</code>), o motivo é que
+a autenticação é inteiramente local — usuário/senha (<code>admin</code>/<code>1234</code>) estão fixos no
+próprio código Dart, e a única "espera" é um <code>Future.delayed</code> simulando um carregamento, sem
+nenhuma chamada de rede real. A única requisição de rede de todo o app é mesmo a do botão "Call Insecure
+API". Não é uma falha do módulo — simplesmente não existe requisição nenhuma para interceptar nesse ponto.
 </div>
 
-<h3>10.4 Validação independente contra um app real de cliente</h3>
+<h3>10.4 Validação independente contra um app real de produção</h3>
 <div class="ok">
-Em uma rodada de testes separada, Eduardo confirmou o módulo funcionando contra um app real de produção —
-o app da Nike (<code>br.com.gruposbf.nike</code>) de um cliente seu — usando o app gerenciador para
-selecionar o alvo e configurar o proxy, sem nenhum ajuste específico de código para esse app. Essa é uma
-validação mais forte do que qualquer app de teste: confirma que a abordagem genérica (a mesma lógica de
-scan/resolução para qualquer app Flutter, sem nada hardcoded por aplicativo) funciona em produção.
+Em uma rodada de testes separada, Eduardo confirmou o módulo funcionando contra um app real de produção de
+um cliente seu, usando apenas o app gerenciador para selecionar o alvo e configurar o proxy, sem nenhum
+ajuste de código. Essa validação (feita de forma independente, em outro momento, por outra pessoa) é uma
+prova mais forte do que qualquer app de teste: confirma que a abordagem genérica (mesma lógica de
+scan/resolução para qualquer app Flutter, nada hardcoded por aplicativo) funciona em produção.
 <br><br>
 Foi observado um comportamento onde a interceptação só passou a funcionar depois de reabrir o app
 gerenciador uma segunda vez. A explicação mais provável não é um bug no gerenciador (que só grava o
 <code>config.json</code>; ele não tem nenhuma ligação em tempo real com o processo nativo) e sim o
-comportamento normal do Zygisk: hooks só entram em processos <em>novos</em>. Se o app da Nike já estava
-rodando em segundo plano (comum em apps de loja), reabri-lo apenas traz o processo existente para frente,
-sem novo hook — é necessário forçar a parada do app-alvo (não do gerenciador) antes de reabrir para o hook
-valer, algo que já consta no guia de instalação (seção 11).
+comportamento normal do Zygisk: hooks só entram em processos <em>novos</em>. Se o app-alvo já estava rodando
+em segundo plano (comum em apps de loja/apps que o usuário mantém aberto), reabri-lo apenas traz o processo
+existente para frente, sem novo hook — é necessário forçar a parada do app-alvo (não do gerenciador) antes
+de reabrir para o hook valer, algo que já consta no guia de instalação (seção 11).
 </div>
+
+<h3>10.5 Compilando os apps de demonstração a partir do código-fonte</h3>
+<p>
+Como nenhum dos dois tinha APK pronto, foi necessário instalar o Flutter SDK e resolver algumas
+incompatibilidades de dependências antigas (ambos os projetos têm alguns anos e não foram atualizados para
+o toolchain atual). Nenhuma dessas mudanças afeta a funcionalidade de rede/TLS testada.
+</p>
+<table>
+<tr><th>Passo</th><th>Detalhe</th></tr>
+<tr><td>1. Instalar o Flutter SDK</td><td>Baixar o canal stable em <code>flutter.dev</code>, extrair em um
+    caminho <strong>curto</strong> (ex: <code>C:\fdev\flutter</code>) — caminhos longos/aninhados no Windows
+    causam erro de "nome de arquivo muito grande" durante o <code>pub get</code>.</td></tr>
+<tr><td>2. <code>flutter config --android-sdk "&lt;caminho do SDK&gt;"</code></td><td>Aponta o Flutter para o
+    Android SDK já instalado (o mesmo usado pelo módulo nativo).</td></tr>
+<tr><td>3. Adicionar <code>android.permission.INTERNET</code></td><td>Faltava no manifesto dos dois apps —
+    sem essa permissão nenhuma conexão de rede é possível, com ou sem o FlutterTap.</td></tr>
+<tr><td>4. Remover dependências legadas incompatíveis</td><td>No Ostorlab: <code>flutter_android</code> (sem
+    null-safety), <code>flutter_inappwebview</code>/<code>webview_flutter</code> (API de Proguard
+    descontinuada), <code>local_auth</code> e <code>path_provider</code> (versões novas dependem do pacote
+    <code>jni</code>, incompatível com a versão do Kotlin Gradle Plugin atual), e
+    <code>android_intent_plus</code> (exige <code>compileSdk</code> mais novo que o do projeto). Todas essas
+    dependências eram usadas só por testes de vulnerabilidade <em>não relacionados</em> a rede/TLS
+    (biometria, webview, intents, etc.) — removidas junto com o código Dart que as usava, sem afetar o teste
+    de TLS que interessa aqui.</td></tr>
+<tr><td>5. <code>flutter build apk --debug</code></td><td>Gera o APK em
+    <code>build/app/outputs/flutter-apk/</code> (app normal) ou <code>build/host/outputs/apk/debug/</code>
+    (caso de um "Flutter module", como o do Ostorlab, que gera um host de teste automaticamente).</td></tr>
+</table>
+
+<h3>10.6 Sobre o app de teste descartado (DVFA)</h3>
+<p>
+O <strong>DVFA (Damn Vulnerable Flutter App)</strong> foi o primeiro app de treinamento usado para tentar
+gerar evidências sem apps de cliente. Como documentado na seção 6.5/6.6, testar contra ele foi o que revelou
+as três incompatibilidades reais de builds mais novos do engine Flutter (e as correções aplicadas), mas o
+DVFA em si acabou sendo descartado como app de demonstração por causa de uma limitação específica daquele
+build (resolução do <code>GetSockAddr</code> para uma função aparentemente errada). Foi substituído pelos
+dois apps das seções 10.1–10.3, ambos confirmados funcionando sem ressalvas.
+</p>
 
 <h2 class="page-break">11. Guia de instalação manual (em um aparelho novo)</h2>
 
@@ -421,6 +492,9 @@ distribuir prontos, o caminho padrão é anexá-los a uma <em>Release</em> do Gi
       <strong>três correções aplicadas e validadas</strong> (seção 6.5); um caso específico
       (<code>GetSockAddr</code> em um build particular, seção 6.6) ficou documentado como limitação
       conhecida em vez de arriscar mudar a lógica compartilhada sem necessidade.</li>
+  <li>Tirar capturas de tela reais do app gerenciador e dos dois apps de demonstração (Ostorlab Insecure App
+      e VulnApp, já compilados e prontos no aparelho) para ilustrar o README/tutorial — pendente, a fazer na
+      próxima sessão.</li>
   <li>Publicar o projeto no GitHub: README completo, tutorial de instalação, capturas de tela, licença.</li>
   <li>Preparar e enviar o módulo para a página oficial de módulos do Magisk
       (<a href="https://github.com/Magisk-Modules-Repo">Magisk-Modules-Repo</a>), seguindo os requisitos de
