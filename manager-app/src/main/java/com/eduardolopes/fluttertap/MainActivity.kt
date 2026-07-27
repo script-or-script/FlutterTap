@@ -2,20 +2,17 @@
 package com.eduardolopes.fluttertap
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
 import com.eduardolopes.fluttertap.ui.FlutterTapTheme
 import com.eduardolopes.fluttertap.ui.HomeScreen
-import com.topjohnwu.superuser.Shell
 
-class MainActivity : ComponentActivity() {
-
-    init {
-        Shell.enableVerboseLogging = false
-        Shell.setDefaultBuilder(Shell.Builder.create().setFlags(Shell.FLAG_MOUNT_MASTER))
-    }
+// AppCompatActivity (not the plain ComponentActivity) is required here: AppCompatDelegate's
+// per-app language backport only auto-recreates the activity with the new locale on API <33
+// when the activity extends AppCompatActivity.
+class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

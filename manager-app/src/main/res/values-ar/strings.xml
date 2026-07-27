@@ -1,0 +1,48 @@
+<resources>
+    <string name="app_name">FlutterTap</string>
+
+    <string name="status_title">الحالة</string>
+    <string name="status_detecting">جارٍ اكتشاف مدير الروت…</string>
+    <string name="status_root_granted">تم منح صلاحية الروت</string>
+    <string name="status_root_denied">تم رفض صلاحية الروت</string>
+    <string name="status_backend_magisk">المدير: Magisk</string>
+    <string name="status_backend_kernelsu">المدير: KernelSU</string>
+    <string name="status_backend_apatch">المدير: APatch</string>
+    <string name="status_backend_unknown">المدير: غير معروف</string>
+    <string name="status_module_installed">وحدة FlutterTap: مثبَّتة</string>
+    <string name="status_module_not_installed">وحدة FlutterTap: غير مثبَّتة</string>
+
+    <string name="proxy_title">البروكسي</string>
+    <string name="proxy_master_switch">تفعيل الاعتراض</string>
+    <string name="proxy_ip_label">عنوان IP للبروكسي</string>
+    <string name="proxy_port_label">منفذ البروكسي</string>
+    <string name="proxy_save_button">حفظ</string>
+    <string name="proxy_saved_confirmation">تم حفظ الإعدادات</string>
+    <string name="proxy_invalid_ip">أدخل عنوان IPv4 صالحًا</string>
+    <string name="proxy_invalid_port">أدخل منفذًا بين 1 و65535</string>
+
+    <string name="apps_title">التطبيقات المستهدَفة</string>
+    <string name="apps_subtitle">اختر التطبيقات المثبَّتة التي يجب على FlutterTap اعتراضها</string>
+    <string name="apps_search_hint">البحث عن تطبيقات</string>
+    <string name="apps_selected_count">تم اختيار %d تطبيق(ات)</string>
+    <string name="apps_empty">لم يتم العثور على تطبيقات</string>
+    <string name="apps_show_system">إظهار تطبيقات النظام</string>
+    <string name="apps_system_badge">نظام</string>
+
+    <string name="language_title">اللغة</string>
+    <string name="language_system">اتباع النظام</string>
+    <string name="language_pt_br">Português (Brasil)</string>
+    <string name="language_en">English</string>
+    <string name="language_zh">中文</string>
+    <string name="language_es">Español</string>
+    <string name="language_ar">العربية</string>
+    <string name="language_fr">Français</string>
+    <string name="language_hi">हिन्दी</string>
+
+    <string name="about_title">حول التطبيق</string>
+    <string name="about_description">يعيد توجيه حركة الشبكة الخاصة بتطبيقات Flutter المحددة إلى بروكسي قابل للتكوين، ويتجاوز التحقق من شهادة TLS الخاصة بالتطبيق (تجاوز SSL pinning في Flutter/BoringSSL)، لأغراض تحليل حركة الشبكة. يعمل كوحدة Zygisk تحت Magisk أو KernelSU (بما في ذلك KernelSU Next) أو APatch — ومتوافق أيضًا مع SukiSu Ultra.</string>
+    <string name="about_developer">تطوير Eduardo Lopes</string>
+    <string name="about_version">الإصدار %s</string>
+
+    <string name="error_root_required">يلزم الوصول إلى صلاحية الروت لتهيئة FlutterTap</string>
+</resources>

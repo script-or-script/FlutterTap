@@ -2,13 +2,13 @@
     <string name="app_name">FlutterTap</string>
 
     <string name="status_title">Status</string>
-    <string name="status_detecting">Detectando backend de root…</string>
+    <string name="status_detecting">Detectando gerenciador de root…</string>
     <string name="status_root_granted">Acesso root concedido</string>
     <string name="status_root_denied">Acesso root negado</string>
-    <string name="status_backend_magisk">Backend: Magisk</string>
-    <string name="status_backend_kernelsu">Backend: KernelSU</string>
-    <string name="status_backend_apatch">Backend: APatch</string>
-    <string name="status_backend_unknown">Backend: desconhecido</string>
+    <string name="status_backend_magisk">Gerenciador: Magisk</string>
+    <string name="status_backend_kernelsu">Gerenciador: KernelSU</string>
+    <string name="status_backend_apatch">Gerenciador: APatch</string>
+    <string name="status_backend_unknown">Gerenciador: desconhecido</string>
     <string name="status_module_installed">Módulo FlutterTap: instalado</string>
     <string name="status_module_not_installed">Módulo FlutterTap: não instalado</string>
 
@@ -34,9 +34,13 @@
     <string name="language_pt_br">Português (Brasil)</string>
     <string name="language_en">English</string>
     <string name="language_zh">中文</string>
+    <string name="language_es">Español</string>
+    <string name="language_ar">العربية</string>
+    <string name="language_fr">Français</string>
+    <string name="language_hi">हिन्दी</string>
 
     <string name="about_title">Sobre</string>
-    <string name="about_description">Redireciona o tráfego de rede de apps Flutter selecionados para um proxy configurável e ignora a verificação de certificado TLS, para fins de análise de tráfego. Funciona como módulo Zygisk no Magisk, KernelSU ou APatch.</string>
+    <string name="about_description">Redireciona o tráfego de rede de apps Flutter selecionados para um proxy configurável e ignora a verificação de certificado TLS do app (bypass de SSL pinning do Flutter/BoringSSL), para fins de análise de tráfego. Funciona como módulo Zygisk no Magisk, KernelSU (incluindo o KernelSU Next) ou APatch — também compatível com o SukiSu Ultra.</string>
     <string name="about_developer">Desenvolvido por Eduardo Lopes</string>
     <string name="about_version">Versão %s</string>
 

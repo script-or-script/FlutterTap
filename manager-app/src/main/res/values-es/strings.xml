@@ -1,0 +1,48 @@
+<resources>
+    <string name="app_name">FlutterTap</string>
+
+    <string name="status_title">Estado</string>
+    <string name="status_detecting">Detectando gestor de root…</string>
+    <string name="status_root_granted">Acceso root concedido</string>
+    <string name="status_root_denied">Acceso root denegado</string>
+    <string name="status_backend_magisk">Gestor: Magisk</string>
+    <string name="status_backend_kernelsu">Gestor: KernelSU</string>
+    <string name="status_backend_apatch">Gestor: APatch</string>
+    <string name="status_backend_unknown">Gestor: desconocido</string>
+    <string name="status_module_installed">Módulo FlutterTap: instalado</string>
+    <string name="status_module_not_installed">Módulo FlutterTap: no instalado</string>
+
+    <string name="proxy_title">Proxy</string>
+    <string name="proxy_master_switch">Activar interceptación</string>
+    <string name="proxy_ip_label">IP del proxy</string>
+    <string name="proxy_port_label">Puerto del proxy</string>
+    <string name="proxy_save_button">Guardar</string>
+    <string name="proxy_saved_confirmation">Configuración guardada</string>
+    <string name="proxy_invalid_ip">Introduce una dirección IPv4 válida</string>
+    <string name="proxy_invalid_port">Introduce un puerto entre 1 y 65535</string>
+
+    <string name="apps_title">Apps objetivo</string>
+    <string name="apps_subtitle">Elige qué apps instaladas debe interceptar FlutterTap</string>
+    <string name="apps_search_hint">Buscar apps</string>
+    <string name="apps_selected_count">%d app(s) seleccionada(s)</string>
+    <string name="apps_empty">No se encontraron apps</string>
+    <string name="apps_show_system">Mostrar apps del sistema</string>
+    <string name="apps_system_badge">SISTEMA</string>
+
+    <string name="language_title">Idioma</string>
+    <string name="language_system">Seguir el sistema</string>
+    <string name="language_pt_br">Português (Brasil)</string>
+    <string name="language_en">English</string>
+    <string name="language_zh">中文</string>
+    <string name="language_es">Español</string>
+    <string name="language_ar">العربية</string>
+    <string name="language_fr">Français</string>
+    <string name="language_hi">हिन्दी</string>
+
+    <string name="about_title">Acerca de</string>
+    <string name="about_description">Redirige el tráfico de red de las apps Flutter seleccionadas a un proxy configurable y omite la verificación del certificado TLS de la app (bypass de SSL pinning de Flutter/BoringSSL), con fines de análisis de tráfico. Funciona como módulo Zygisk en Magisk, KernelSU (incluido KernelSU Next) o APatch — también compatible con SukiSu Ultra.</string>
+    <string name="about_developer">Desarrollado por Eduardo Lopes</string>
+    <string name="about_version">Versión %s</string>
+
+    <string name="error_root_required">Se requiere acceso root para configurar FlutterTap</string>
+</resources>

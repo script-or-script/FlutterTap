@@ -2,13 +2,13 @@
     <string name="app_name">FlutterTap</string>
 
     <string name="status_title">状态</string>
-    <string name="status_detecting">正在检测 Root 后端…</string>
+    <string name="status_detecting">正在检测 Root 管理器…</string>
     <string name="status_root_granted">已获得 Root 权限</string>
     <string name="status_root_denied">Root 权限被拒绝</string>
-    <string name="status_backend_magisk">后端：Magisk</string>
-    <string name="status_backend_kernelsu">后端：KernelSU</string>
-    <string name="status_backend_apatch">后端：APatch</string>
-    <string name="status_backend_unknown">后端：未知</string>
+    <string name="status_backend_magisk">管理器：Magisk</string>
+    <string name="status_backend_kernelsu">管理器：KernelSU</string>
+    <string name="status_backend_apatch">管理器：APatch</string>
+    <string name="status_backend_unknown">管理器：未知</string>
     <string name="status_module_installed">FlutterTap 模块：已安装</string>
     <string name="status_module_not_installed">FlutterTap 模块：未安装</string>
 
@@ -34,9 +34,13 @@
     <string name="language_pt_br">Português (Brasil)</string>
     <string name="language_en">English</string>
     <string name="language_zh">中文</string>
+    <string name="language_es">Español</string>
+    <string name="language_ar">العربية</string>
+    <string name="language_fr">Français</string>
+    <string name="language_hi">हिन्दी</string>
 
     <string name="about_title">关于</string>
-    <string name="about_description">将所选 Flutter 应用的网络流量重定向到可配置的代理，并绕过 TLS 证书验证，用于流量分析。作为 Zygisk 模块运行于 Magisk、KernelSU 或 APatch。</string>
+    <string name="about_description">将所选 Flutter 应用的网络流量重定向到可配置的代理，并绕过应用的 TLS 证书验证（即 Flutter/BoringSSL 的 SSL pinning 绕过），用于流量分析。作为 Zygisk 模块运行于 Magisk、KernelSU（包括 KernelSU Next）或 APatch —— 同样兼容 SukiSu Ultra。</string>
     <string name="about_developer">开发者：Eduardo Lopes</string>
     <string name="about_version">版本 %s</string>
 

@@ -5,8 +5,19 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.graphics.drawable.toBitmap
 
-data class AppInfo(val packageName: String, val label: String, val isSystemApp: Boolean = false)
+data class AppInfo(
+    val packageName: String,
+    val label: String,
+    val isSystemApp: Boolean = false,
+    val icon: ImageBitmap? = null,
+)
+
+/** Small enough to keep the per-row list icon cheap to decode and hold in memory. */
+private const val ICON_SIZE_PX = 96
 
 object AppRepository {
     /** Every launchable (non-FlutterTap) app installed on the device, sorted by label. */
@@ -44,10 +55,16 @@ object AppRepository {
     private fun appInfoFor(pm: PackageManager, pkg: String, forceSystem: Boolean = false): AppInfo {
         return try {
             val appInfo = pm.getApplicationInfo(pkg, 0)
+            val icon = try {
+                pm.getApplicationIcon(appInfo).toBitmap(ICON_SIZE_PX, ICON_SIZE_PX).asImageBitmap()
+            } catch (e: Exception) {
+                null
+            }
             AppInfo(
                 packageName = pkg,
                 label = pm.getApplicationLabel(appInfo).toString(),
                 isSystemApp = forceSystem || (appInfo.flags and ApplicationInfo.FLAG_SYSTEM != 0),
+                icon = icon,
             )
         } catch (e: PackageManager.NameNotFoundException) {
             AppInfo(packageName = pkg, label = pkg, isSystemApp = forceSystem)

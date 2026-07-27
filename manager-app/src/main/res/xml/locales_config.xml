@@ -2,4 +2,8 @@
     <locale android:name="en" />
     <locale android:name="pt-BR" />
     <locale android:name="zh" />
+    <locale android:name="es" />
+    <locale android:name="ar" />
+    <locale android:name="fr" />
+    <locale android:name="hi" />
 </locale-config>

@@ -2,13 +2,13 @@
     <string name="app_name">FlutterTap</string>
 
     <string name="status_title">Status</string>
-    <string name="status_detecting">Detecting root backend…</string>
+    <string name="status_detecting">Detecting root manager…</string>
     <string name="status_root_granted">Root access granted</string>
     <string name="status_root_denied">Root access denied</string>
-    <string name="status_backend_magisk">Backend: Magisk</string>
-    <string name="status_backend_kernelsu">Backend: KernelSU</string>
-    <string name="status_backend_apatch">Backend: APatch</string>
-    <string name="status_backend_unknown">Backend: unknown</string>
+    <string name="status_backend_magisk">Manager: Magisk</string>
+    <string name="status_backend_kernelsu">Manager: KernelSU</string>
+    <string name="status_backend_apatch">Manager: APatch</string>
+    <string name="status_backend_unknown">Manager: unknown</string>
     <string name="status_module_installed">FlutterTap module: installed</string>
     <string name="status_module_not_installed">FlutterTap module: not installed</string>
 
@@ -34,9 +34,13 @@
     <string name="language_pt_br">Português (Brasil)</string>
     <string name="language_en">English</string>
     <string name="language_zh">中文</string>
+    <string name="language_es">Español</string>
+    <string name="language_ar">العربية</string>
+    <string name="language_fr">Français</string>
+    <string name="language_hi">हिन्दी</string>
 
     <string name="about_title">About</string>
-    <string name="about_description">Redirects the network traffic of selected Flutter apps to a configurable proxy and bypasses TLS certificate verification, for traffic analysis purposes. Works as a Zygisk module under Magisk, KernelSU or APatch.</string>
+    <string name="about_description">Redirects the network traffic of selected Flutter apps to a configurable proxy and bypasses the app\'s TLS certificate verification (Flutter/BoringSSL SSL pinning bypass), for traffic analysis purposes. Works as a Zygisk module under Magisk, KernelSU (including KernelSU Next) or APatch — also compatible with SukiSu Ultra.</string>
     <string name="about_developer">Developed by Eduardo Lopes</string>
     <string name="about_version">Version %s</string>
 

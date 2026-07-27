@@ -1,0 +1,48 @@
+<resources>
+    <string name="app_name">FlutterTap</string>
+
+    <string name="status_title">स्थिति</string>
+    <string name="status_detecting">रूट मैनेजर का पता लगाया जा रहा है…</string>
+    <string name="status_root_granted">रूट एक्सेस स्वीकृत</string>
+    <string name="status_root_denied">रूट एक्सेस अस्वीकृत</string>
+    <string name="status_backend_magisk">मैनेजर: Magisk</string>
+    <string name="status_backend_kernelsu">मैनेजर: KernelSU</string>
+    <string name="status_backend_apatch">मैनेजर: APatch</string>
+    <string name="status_backend_unknown">मैनेजर: अज्ञात</string>
+    <string name="status_module_installed">FlutterTap मॉड्यूल: इंस्टॉल है</string>
+    <string name="status_module_not_installed">FlutterTap मॉड्यूल: इंस्टॉल नहीं है</string>
+
+    <string name="proxy_title">प्रॉक्सी</string>
+    <string name="proxy_master_switch">हुकिंग सक्षम करें</string>
+    <string name="proxy_ip_label">प्रॉक्सी IP</string>
+    <string name="proxy_port_label">प्रॉक्सी पोर्ट</string>
+    <string name="proxy_save_button">सहेजें</string>
+    <string name="proxy_saved_confirmation">कॉन्फ़िगरेशन सहेजा गया</string>
+    <string name="proxy_invalid_ip">एक मान्य IPv4 पता दर्ज करें</string>
+    <string name="proxy_invalid_port">1 से 65535 के बीच एक पोर्ट दर्ज करें</string>
+
+    <string name="apps_title">लक्ष्य ऐप्स</string>
+    <string name="apps_subtitle">चुनें कि FlutterTap को किन इंस्टॉल किए गए ऐप्स को इंटरसेप्ट करना चाहिए</string>
+    <string name="apps_search_hint">ऐप्स खोजें</string>
+    <string name="apps_selected_count">%d ऐप चयनित</string>
+    <string name="apps_empty">कोई ऐप नहीं मिला</string>
+    <string name="apps_show_system">सिस्टम ऐप्स दिखाएं</string>
+    <string name="apps_system_badge">सिस्टम</string>
+
+    <string name="language_title">भाषा</string>
+    <string name="language_system">सिस्टम अनुसरण करें</string>
+    <string name="language_pt_br">Português (Brasil)</string>
+    <string name="language_en">English</string>
+    <string name="language_zh">中文</string>
+    <string name="language_es">Español</string>
+    <string name="language_ar">العربية</string>
+    <string name="language_fr">Français</string>
+    <string name="language_hi">हिन्दी</string>
+
+    <string name="about_title">परिचय</string>
+    <string name="about_description">चुने गए Flutter ऐप्स के नेटवर्क ट्रैफ़िक को एक कॉन्फ़िगर करने योग्य प्रॉक्सी पर रीडायरेक्ट करता है और ट्रैफ़िक विश्लेषण के उद्देश्य से ऐप के TLS सर्टिफ़िकेट सत्यापन को बायपास करता है (Flutter/BoringSSL SSL पिनिंग बायपास)। Magisk, KernelSU (KernelSU Next सहित) या APatch के तहत Zygisk मॉड्यूल के रूप में काम करता है — SukiSu Ultra के साथ भी संगत।</string>
+    <string name="about_developer">Eduardo Lopes द्वारा विकसित</string>
+    <string name="about_version">संस्करण %s</string>
+
+    <string name="error_root_required">FlutterTap को कॉन्फ़िगर करने के लिए रूट एक्सेस आवश्यक है</string>
+</resources>

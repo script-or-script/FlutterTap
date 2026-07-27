@@ -1,6 +1,7 @@
 // FlutterTap manager app -- by Eduardo Lopes
 package com.eduardolopes.fluttertap.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -45,6 +47,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.appcompat.app.AppCompatDelegate
 import com.eduardolopes.fluttertap.R
 import com.eduardolopes.fluttertap.data.AppInfo
 import com.eduardolopes.fluttertap.data.AppRepository
@@ -113,9 +116,9 @@ fun HomeScreen(onLanguageSelected: (String?) -> Unit) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            item { LanguageCard(onLanguageSelected = onLanguageSelected) }
             item { StatusCard(status!!) }
             item { ProxyCard(config = config, onSave = { newConfig -> persist(newConfig, notify = true) }) }
-            item { LanguageCard(onLanguageSelected = onLanguageSelected) }
             item {
                 AppsCard(
                     apps = if (showSystemApps) launchableApps + systemOnlyApps else launchableApps,
@@ -247,12 +250,20 @@ private val LANGUAGE_OPTIONS = listOf(
     LanguageOption("pt-BR", R.string.language_pt_br),
     LanguageOption("en", R.string.language_en),
     LanguageOption("zh", R.string.language_zh),
+    LanguageOption("es", R.string.language_es),
+    LanguageOption("ar", R.string.language_ar),
+    LanguageOption("fr", R.string.language_fr),
+    LanguageOption("hi", R.string.language_hi),
 )
 
 @Composable
 private fun LanguageCard(onLanguageSelected: (String?) -> Unit) {
     var expanded by rememberSaveable { mutableStateOf(false) }
-    var selectedIndex by rememberSaveable { mutableStateOf(0) }
+    val currentTag = remember { AppCompatDelegate.getApplicationLocales().toLanguageTags().takeIf { it.isNotEmpty() } }
+    var selectedIndex by rememberSaveable {
+        val index = LANGUAGE_OPTIONS.indexOfFirst { it.tag != null && it.tag == currentTag }
+        mutableStateOf(if (index >= 0) index else 0)
+    }
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
@@ -352,6 +363,13 @@ private fun AppsCard(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
+                            if (app.icon != null) {
+                                Image(
+                                    bitmap = app.icon,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(32.dp).padding(end = 8.dp),
+                                )
+                            }
                             Column(Modifier.padding(vertical = 4.dp).weight(1f)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
