@@ -14,6 +14,7 @@
     <string name="status_module_enabled_label">已启用</string>
     <string name="status_module_disabled_label">已禁用</string>
     <string name="status_grant_root_button">授予 Root 权限</string>
+    <string name="status_grant_root_hint">如果没有反应，可能是你的 Root 管理器已经保存了之前的决定 —— 请打开它的应用（Magisk/KernelSU/SukiSu Ultra/APatch）手动为 FlutterTap 授权。</string>
 
     <string name="proxy_title">代理</string>
     <string name="proxy_master_switch">启用拦截</string>

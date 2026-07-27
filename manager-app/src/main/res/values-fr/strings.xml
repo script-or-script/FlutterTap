@@ -14,6 +14,7 @@
     <string name="status_module_enabled_label">Activé</string>
     <string name="status_module_disabled_label">Désactivé</string>
     <string name="status_grant_root_button">Accorder l\'accès root</string>
+    <string name="status_grant_root_hint">Si rien ne se passe, votre gestionnaire root a peut-être déjà une décision enregistrée -- ouvrez son app (Magisk/KernelSU/SukiSu Ultra/APatch) et accordez l\'accès à FlutterTap manuellement.</string>
 
     <string name="proxy_title">Proxy</string>
     <string name="proxy_master_switch">Activer l\'interception</string>

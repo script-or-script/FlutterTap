@@ -14,6 +14,7 @@
     <string name="status_module_enabled_label">مفعَّلة</string>
     <string name="status_module_disabled_label">معطَّلة</string>
     <string name="status_grant_root_button">منح صلاحية الروت</string>
+    <string name="status_grant_root_hint">إذا لم يحدث شيء، فقد يكون مدير الروت لديك قد حفظ قرارًا سابقًا بالفعل — افتح تطبيقه (Magisk/KernelSU/SukiSu Ultra/APatch) وامنح الوصول لـ FlutterTap يدويًا.</string>
 
     <string name="proxy_title">البروكسي</string>
     <string name="proxy_master_switch">تفعيل الاعتراض</string>

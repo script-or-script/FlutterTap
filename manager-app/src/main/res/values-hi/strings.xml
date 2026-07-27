@@ -14,6 +14,7 @@
     <string name="status_module_enabled_label">सक्षम है</string>
     <string name="status_module_disabled_label">अक्षम है</string>
     <string name="status_grant_root_button">रूट एक्सेस प्रदान करें</string>
+    <string name="status_grant_root_hint">अगर कुछ न हो, तो हो सकता है आपके रूट मैनेजर के पास पहले से ही सहेजा गया निर्णय हो — इसका ऐप (Magisk/KernelSU/SukiSu Ultra/APatch) खोलें और FlutterTap को मैन्युअल रूप से एक्सेस दें।</string>
 
     <string name="proxy_title">प्रॉक्सी</string>
     <string name="proxy_master_switch">हुकिंग सक्षम करें</string>

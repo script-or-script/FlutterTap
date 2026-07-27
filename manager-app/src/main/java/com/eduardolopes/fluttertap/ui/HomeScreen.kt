@@ -189,6 +189,11 @@ private fun StatusCard(status: RootStatus, onRetryRoot: () -> Unit) {
                 TextButton(onClick = onRetryRoot, modifier = Modifier.padding(top = 4.dp)) {
                     Text(stringResource(R.string.status_grant_root_button))
                 }
+                Text(
+                    stringResource(R.string.status_grant_root_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }

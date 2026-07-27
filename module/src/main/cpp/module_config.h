@@ -8,9 +8,14 @@
 // native module through the root companion process at /data/adb/fluttertap/config.json
 struct ModuleConfig {
     bool enabled = true;
-    // Defaults mirror the original script's hardcoded values so behavior is
-    // unchanged until the user picks their own values from the manager app.
-    std::string proxy_ip = "192.168.15.17";
+    // proxy_port mirrors the original script's hardcoded value. proxy_ip is
+    // deliberately NOT the original script's default (192.168.15.17) -- that
+    // looks enough like a real home-network address (192.168.x.x) that users
+    // could mistake it for their own and never notice they forgot to set it.
+    // 203.0.113.0/24 (RFC 5737, "TEST-NET-3") is reserved for documentation
+    // and can never collide with a real LAN/WAN address, making it obvious
+    // this needs to be replaced.
+    std::string proxy_ip = "203.0.113.1";
     int proxy_port = 8083;
     std::vector<std::string> target_packages;
 

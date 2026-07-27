@@ -10,7 +10,10 @@ import org.json.JSONObject
  */
 data class ConfigData(
     val enabled: Boolean = true,
-    val proxyIp: String = "192.168.15.17",
+    // 203.0.113.0/24 is reserved for documentation (RFC 5737) and can never be
+    // a real LAN address -- unlike a 192.168.x.x-looking default, a user can't
+    // mistake this for their own IP and leave it unchanged by accident.
+    val proxyIp: String = "203.0.113.1",
     val proxyPort: Int = 8083,
     val targetPackages: Set<String> = emptySet(),
 ) {
@@ -36,7 +39,7 @@ data class ConfigData(
                 }
                 ConfigData(
                     enabled = obj.optBoolean("enabled", true),
-                    proxyIp = obj.optString("proxy_ip", "192.168.15.17"),
+                    proxyIp = obj.optString("proxy_ip", "203.0.113.1"),
                     proxyPort = obj.optInt("proxy_port", 8083),
                     targetPackages = pkgs,
                 )

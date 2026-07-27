@@ -14,6 +14,7 @@
     <string name="status_module_enabled_label">Enabled</string>
     <string name="status_module_disabled_label">Disabled</string>
     <string name="status_grant_root_button">Grant root access</string>
+    <string name="status_grant_root_hint">If nothing happens, your root manager may already have a saved decision -- open its app (Magisk/KernelSU/SukiSu Ultra/APatch) and grant access to FlutterTap manually.</string>
 
     <string name="proxy_title">Proxy</string>
     <string name="proxy_master_switch">Enable hooking</string>

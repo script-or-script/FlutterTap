@@ -32,7 +32,7 @@ if [ ! -f "$CONFIG_FILE" ]; then
   cat > "$CONFIG_FILE" << 'EOF'
 {
   "enabled": true,
-  "proxy_ip": "192.168.15.17",
+  "proxy_ip": "203.0.113.1",
   "proxy_port": 8083,
   "target_packages": []
 }
