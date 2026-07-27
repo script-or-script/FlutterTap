@@ -219,6 +219,71 @@ solução foi apontar o <code>JAVA_HOME</code> para o JDK 21 que já vem embutid
 instalado, evitando precisar baixar/instalar outro JDK à parte.
 </p>
 
+<h3>6.5 Compatibilidade com builds mais novos do engine Flutter (app de demonstração)</h3>
+<p>
+Para conseguir capturas de tela e evidências sem usar apps de clientes, foi selecionado o
+<strong>DVFA (Damn Vulnerable Flutter App)</strong> — um app de treinamento open-source (MIT), mapeado
+nas 10 vulnerabilidades do OWASP Mobile Top 10, com APK pronto na aba Releases do GitHub
+(<code>github.com/Schmiemandev/dvfa</code>). O APK oficial não declarava a permissão
+<code>android.permission.INTERNET</code> (confirmado via <code>aapt dump badging</code>), então foi
+recompilado localmente (decompilado com <code>apktool</code>, permissão adicionada, reempacotado e
+assinado com a chave de debug) só para viabilizar o teste — sem alterar nenhuma outra funcionalidade do app.
+</p>
+<div class="warn">
+Ao testar contra esse app, o módulo falhou em resolver o endereço de <code>verify_cert_chain</code>. A
+investigação revelou <strong>três incompatibilidades reais</strong> entre a lógica original do script e
+como esse binário específico (compilado com uma toolchain mais nova) é estruturado — nenhuma delas é um
+bug do FlutterTap em si, e sim uma limitação da técnica original que também afetaria o script Frida:
+<ol>
+  <li><strong>Biblioteca mapeada direto do APK.</strong> Builds recentes do Android/AGP usam
+      <code>extractNativeLibs="false"</code> por padrão, então a <code>libflutter.so</code> não vira um
+      arquivo próprio — fica mapeada por offset dentro do <code>base.apk</code>. A busca original (por
+      caminho de arquivo em <code>/proc/self/maps</code>) não encontra nada nesse caso. Corrigido trocando
+      para <code>dl_iterate_phdr</code>, que o bionic reporta corretamente nos dois casos.</li>
+  <li><strong>Segmentos de rodata e texto combinados.</strong> Esse binário específico funde os segmentos
+      ELF de rodata e de código executável em um único <code>PT_LOAD</code> (comportamento padrão de
+      versões mais novas do linker lld), enquanto a lógica original assume que são dois segmentos
+      separados. Corrigido identificando "o segmento executável" pela flag <code>PF_X</code> em vez de
+      assumir qual seria o segundo <code>PT_LOAD</code>.</li>
+  <li><strong>Padrão de bytes preso a um registrador específico.</strong> O padrão de bytes original do
+      script para achar o par de instruções <code>adrp</code>/<code>add</code> (e o equivalente x64 com
+      <code>lea</code>) na verdade fixa, nos "nibbles fixos" do padrão, o registrador específico que o
+      compilador escolheu no binário onde o script foi originalmente desenvolvido. Um binário compilado
+      com registradores diferentes para o mesmo cálculo simplesmente não bate com o padrão. Corrigido
+      buscando pela instrução em si (via Capstone) e validando o endereço calculado, independente de qual
+      registrador foi usado — o que também tornou desnecessário o caso especial do app da Alibaba que o
+      script original tinha (esse caso especial existia só por causa dessa mesma fragilidade).</li>
+</ol>
+Após as três correções, o módulo resolveu os endereços corretamente e instalou os hooks com sucesso no
+DVFA também.
+</div>
+
+<h3>6.6 Limitação conhecida: resolução do GetSockAddr em um build específico</h3>
+<div class="warn">
+Mesmo depois das três correções acima, o DVFA continuou sem interceptar o tráfego real de rede: os
+endereços "resolvem" e os hooks são instalados normalmente, mas a reescrita do <code>sockaddr</code> nunca
+dispara nas requisições reais do app (confirmado inclusive forçando uma conexão totalmente nova, alternando
+o Wi-Fi antes de tentar de novo — descartando a hipótese de reaproveitamento de uma conexão já existente).
+<br><br>
+Enquanto isso, o mecanismo funcionou de ponta a ponta, com tráfego real capturado, em <strong>dois outros
+apps completamente independentes</strong>: o Reqable (testado por mim, com captura completa no Burp) e o
+app da Nike de um cliente real (testado de forma independente pelo Eduardo, no próprio celular, confirmando
+que o módulo já está em uso prático real).
+<br><br>
+A explicação mais provável: a resolução do <code>GetSockAddr</code> depende de contar quantas instruções
+<code>bl</code> existem a partir do <code>Socket_CreateConnect</code> e pegar o alvo da 2ª chamada (mesma
+lógica do script original). Nesse build específico do DVFA, esse mesmo procedimento provavelmente aponta
+para uma função diferente, que <em>parece</em> uma função de preenchimento de <code>sockaddr</code> (mesmo
+formato de prólogo, escreve a família do endereço no offset 0, zera um buffer do tamanho de um
+<code>sockaddr_storage</code>) mas não é de fato a função chamada nas conexões TCP reais desse app.
+<br><br>
+Essa investigação não foi levada adiante: seria necessário reverter todo o grafo de chamadas do
+<code>Socket_CreateConnect</code> desse build específico, sem garantia de solução rápida, e esse app de
+teste não é crítico para o projeto — a decisão (após conversa) foi não arriscar mexer na lógica de hook
+compartilhada por causa de um único app de teste, e manter o código no estado já validado com o Reqable e
+com o app da Nike.
+</div>
+
 <h2 class="page-break">7. Estrutura do projeto</h2>
 <pre>
 Modulo SukiSu/
@@ -300,6 +365,23 @@ rede é possível para ele, com ou sem o FlutterTap. Não é um problema do mód
 instalou os hooks normalmente nesse app também), e sim uma limitação do app de teste em si.
 </div>
 
+<h3>10.4 Validação independente contra um app real de cliente</h3>
+<div class="ok">
+Em uma rodada de testes separada, Eduardo confirmou o módulo funcionando contra um app real de produção —
+o app da Nike (<code>br.com.gruposbf.nike</code>) de um cliente seu — usando o app gerenciador para
+selecionar o alvo e configurar o proxy, sem nenhum ajuste específico de código para esse app. Essa é uma
+validação mais forte do que qualquer app de teste: confirma que a abordagem genérica (a mesma lógica de
+scan/resolução para qualquer app Flutter, sem nada hardcoded por aplicativo) funciona em produção.
+<br><br>
+Foi observado um comportamento onde a interceptação só passou a funcionar depois de reabrir o app
+gerenciador uma segunda vez. A explicação mais provável não é um bug no gerenciador (que só grava o
+<code>config.json</code>; ele não tem nenhuma ligação em tempo real com o processo nativo) e sim o
+comportamento normal do Zygisk: hooks só entram em processos <em>novos</em>. Se o app da Nike já estava
+rodando em segundo plano (comum em apps de loja), reabri-lo apenas traz o processo existente para frente,
+sem novo hook — é necessário forçar a parada do app-alvo (não do gerenciador) antes de reabrir para o hook
+valer, algo que já consta no guia de instalação (seção 11).
+</div>
+
 <h2 class="page-break">11. Guia de instalação manual (em um aparelho novo)</h2>
 
 <h3>11.1 Arquivos necessários</h3>
@@ -333,9 +415,12 @@ distribuir prontos, o caminho padrão é anexá-los a uma <em>Release</em> do Gi
 <h2>12. Próximos passos</h2>
 <ol>
   <li class="ok" style="list-style:none; margin-left:-20px; padding:6px 10px;">✔ Testar o módulo em um dispositivo real contra um app Flutter conhecido e validar a captura de
-      tráfego no Burp Suite — <strong>concluído</strong> (seção 10).</li>
-  <li>Ajustar a resolução de endereços caso alguma versão específica do engine Flutter/BoringSSL gere
-      código ligeiramente diferente do esperado (o que também aconteceria com o script original).</li>
+      tráfego no Burp Suite — <strong>concluído</strong> (seção 10), incluindo confirmação independente
+      contra um app real de produção (seção 10.4).</li>
+  <li class="ok" style="list-style:none; margin-left:-20px; padding:6px 10px;">✔ Ajustar a resolução de endereços para builds mais novos do engine Flutter/BoringSSL —
+      <strong>três correções aplicadas e validadas</strong> (seção 6.5); um caso específico
+      (<code>GetSockAddr</code> em um build particular, seção 6.6) ficou documentado como limitação
+      conhecida em vez de arriscar mudar a lógica compartilhada sem necessidade.</li>
   <li>Publicar o projeto no GitHub: README completo, tutorial de instalação, capturas de tela, licença.</li>
   <li>Preparar e enviar o módulo para a página oficial de módulos do Magisk
       (<a href="https://github.com/Magisk-Modules-Repo">Magisk-Modules-Repo</a>), seguindo os requisitos de

@@ -3,13 +3,11 @@
 
 #include <elf.h>
 #include <fcntl.h>
-#include <sys/sysmacros.h>
+#include <link.h>
 #include <unistd.h>
 
 #include <cstdio>
 #include <cstring>
-#include <fstream>
-#include <sstream>
 
 #include "log.h"
 
@@ -44,38 +42,41 @@ bool isKnownPType(uint32_t p_type) {
     }
 }
 
+struct FindModuleCtx {
+    const char *suffix;
+    size_t suffixLen;
+    bool found = false;
+    uintptr_t base = 0;
+    std::string path;
+};
+
+int findModuleCallback(struct dl_phdr_info *info, size_t, void *data) {
+    auto *ctx = static_cast<FindModuleCtx *>(data);
+    if (!info->dlpi_name) return 0;
+    size_t nameLen = strlen(info->dlpi_name);
+    if (nameLen < ctx->suffixLen) return 0;
+    if (strcmp(info->dlpi_name + (nameLen - ctx->suffixLen), ctx->suffix) != 0) return 0;
+
+    ctx->found = true;
+    ctx->base = static_cast<uintptr_t>(info->dlpi_addr);
+    ctx->path = info->dlpi_name;
+    return 1; // non-zero stops dl_iterate_phdr from visiting further modules
+}
+
 } // namespace
 
 bool find_module_by_suffix(const char *name_suffix, MappedModule &out) {
-    std::ifstream maps("/proc/self/maps");
-    if (!maps.is_open()) return false;
+    // dl_iterate_phdr (not /proc/self/maps path matching) so this also works
+    // when the APK was built with extractNativeLibs=false and the library is
+    // mapped directly out of the APK's zip rather than as its own file --
+    // bionic still reports dlpi_addr/dlpi_name correctly either way.
+    FindModuleCtx ctx{name_suffix, strlen(name_suffix)};
+    dl_iterate_phdr(findModuleCallback, &ctx);
+    if (!ctx.found) return false;
 
-    std::string line;
-    const size_t suffix_len = strlen(name_suffix);
-    while (std::getline(maps, line)) {
-        if (line.size() < suffix_len) continue;
-        if (line.compare(line.size() - suffix_len, suffix_len, name_suffix) != 0) continue;
-
-        // "<start>-<end> <perms> <offset> <dev-maj>:<dev-min> <inode> <path>"
-        std::istringstream iss(line);
-        std::string addrRange, perms, offset, devStr, inodeStr, path;
-        iss >> addrRange >> perms >> offset >> devStr >> inodeStr;
-        std::getline(iss, path);
-        size_t firstNonSpace = path.find_first_not_of(' ');
-        path = firstNonSpace == std::string::npos ? "" : path.substr(firstNonSpace);
-
-        uintptr_t start = std::stoull(addrRange.substr(0, addrRange.find('-')), nullptr, 16);
-
-        unsigned int devMajor = 0, devMinor = 0;
-        sscanf(devStr.c_str(), "%x:%x", &devMajor, &devMinor);
-
-        out.base = start;
-        out.path = path;
-        out.dev = makedev(devMajor, devMinor);
-        out.inode = static_cast<ino_t>(std::stoull(inodeStr));
-        return true;
-    }
-    return false;
+    out.base = ctx.base;
+    out.path = ctx.path;
+    return true;
 }
 
 bool parse_elf_segments(const MappedModule &mod, ElfSegments &out) {
@@ -85,7 +86,14 @@ bool parse_elf_segments(const MappedModule &mod, ElfSegments &out) {
         return false;
     }
 
-    int fd = open(mod.path.c_str(), O_RDONLY);
+    // When the library is mapped directly out of the APK (path looks like
+    // ".../base.apk!/lib/arm64-v8a/libflutter.so"), there is no standalone
+    // file to open at that path -- the ELF itself starts at a byte offset
+    // inside base.apk that would need its own zip parsing to locate. Skip
+    // the file-fallback entirely in that case; the in-memory reads above are
+    // the primary path anyway and normally sufficient (the ELF/program
+    // headers are always resident once the module is mapped).
+    int fd = mod.path.find("!/") == std::string::npos ? open(mod.path.c_str(), O_RDONLY) : -1;
 
     auto readEhdrFromFile = [&]() -> Elf64_Ehdr {
         Elf64_Ehdr fileHdr{};
@@ -119,6 +127,7 @@ bool parse_elf_segments(const MappedModule &mod, ElfSegments &out) {
         }
     }
 
+    bool foundRodataSegment = false;
     bool foundTextSegment = false;
     for (uint16_t i = 0; i < phnum; i++) {
         uintptr_t phdrAddr = mod.base + phoff + static_cast<uint64_t>(i) * phentsize;
@@ -141,12 +150,22 @@ bool parse_elf_segments(const MappedModule &mod, ElfSegments &out) {
             phdr = filePhdr;
         }
 
-        if (phdr.p_type == PT_LOAD && phdr.p_vaddr == 0) {
-            out.rodata_memsz = phdr.p_memsz;
-            continue;
-        }
-        if (phdr.p_type == PT_LOAD && phdr.p_vaddr != 0) {
-            if (!foundTextSegment) {
+        if (phdr.p_type == PT_LOAD) {
+            // The original script (and this port, until this fix) assumed the
+            // classic layout: a rodata-only PT_LOAD at vaddr 0, then a
+            // separate executable PT_LOAD at a nonzero vaddr. Newer lld
+            // defaults (e.g. --no-rosegment, now common in recently-built
+            // libflutter.so) instead merge rodata and .text into a single
+            // R+E PT_LOAD starting at vaddr 0 -- confirmed against a real
+            // APK during testing. Using PF_X to find "the executable
+            // segment" handles both layouts: for the classic layout it's
+            // still the second PT_LOAD; for the merged layout it's the same
+            // first PT_LOAD that also supplied rodata_memsz.
+            if (!foundRodataSegment) {
+                out.rodata_memsz = phdr.p_memsz;
+                foundRodataSegment = true;
+            }
+            if (!foundTextSegment && (phdr.p_flags & PF_X)) {
                 out.text_vaddr = phdr.p_vaddr;
                 out.text_memsz = phdr.p_memsz;
                 foundTextSegment = true;

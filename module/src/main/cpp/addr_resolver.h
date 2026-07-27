@@ -18,7 +18,9 @@ struct ResolvedAddrs {
     uintptr_t get_sock_addr = 0;
 };
 
-// `package_name` is only used to pick the alibaba.com-specific pattern
-// variant the original script special-cases.
+// `package_name` is currently unused by the resolver itself (kept for
+// logging/future use) -- the original script's alibaba.com-specific pattern
+// variant is unnecessary here since the scan is register-allocation-agnostic.
+// See resolveVerifyCertChainArm64's comment in addr_resolver.cpp.
 bool resolve_addresses(const MappedModule &mod, const ElfSegments &segs, const std::string &package_name,
                        ResolvedAddrs &out);

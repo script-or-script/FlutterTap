@@ -55,10 +55,6 @@ decoder, to avoid subtly misreading an instruction encoding.
   advancing by the decoded instruction length. `addr_resolver.cpp` reproduces
   this exactly (`disasmOne` at `addr`, then `addr + 1`, ...) since that's
   what was empirically verified to work against real BoringSSL/Flutter builds.
-- **alibaba.com pattern variant.** The script special-cases
-  `com.alibaba.intl.android.apps.poseidon`'s slightly different `adrp`/`add`
-  byte pattern; `resolveVerifyCertChainArm64` keeps that special case.
-
 ## Deliberate improvements (behavior-preserving)
 
 The original script is meant for a single, short-lived, human-supervised Frida
@@ -85,6 +81,74 @@ things were hardened without changing what actually happens on the wire:
   `awaitForCondition`/`setInterval` polling loop) and only then resolves
   addresses and installs hooks -- entirely through Dobby, which has no such
   lifecycle restriction.
+
+## Real-device findings that changed the original script's approach
+
+Testing against real, unrelated apps on physical hardware surfaced three
+compatibility gaps in the address-resolution approach the original script
+uses. All three are things that would also affect the original Frida script
+if pointed at the same binaries -- they're not FlutterTap-specific bugs, but
+FlutterTap fixes them since it has to work unattended, without a human
+adjusting the script per target.
+
+- **Libraries mapped directly out of the APK.** Modern Android/AGP defaults
+  to `extractNativeLibs="false"`, which keeps native libraries compressed-off
+  inside the APK and mmaps them directly from the zip rather than extracting
+  them to their own file. `/proc/self/maps` then shows the mapping's path as
+  the APK itself (e.g. `.../base.apk`), not `.../libflutter.so` -- so the
+  original suffix-matching approach to "find libflutter.so" fails outright.
+  `find_module_by_suffix` (`elf_utils.cpp`) uses `dl_iterate_phdr` instead:
+  bionic reports the correct `dlpi_addr`/`dlpi_name` (as something like
+  `.../base.apk!/lib/arm64-v8a/libflutter.so`) regardless of which loading
+  method was used.
+- **Merged rodata+text PT_LOAD segment.** The original `parseElf()` (and this
+  port, initially) assumed the classic ELF layout: a rodata-only `PT_LOAD` at
+  `p_vaddr == 0`, and a separate executable `PT_LOAD` at a nonzero vaddr.
+  Some `libflutter.so` builds (linked with newer lld defaults, e.g.
+  `--no-rosegment`) instead merge rodata and `.text` into a single `R+E`
+  `PT_LOAD` starting at vaddr 0. `parse_elf_segments` now identifies "the
+  executable segment" by its `PF_X` flag rather than by assuming it's the
+  second `PT_LOAD` -- which is the same segment as rodata in the merged case,
+  and the classic second segment otherwise.
+- **Byte patterns baked in a specific register.** The script's `adrp`/`add`
+  byte pattern (`?9 ?? ?? ?0 29 ?? ?? 91`, arm64) and `lea` pattern
+  (`48 8d 3d ?? ?? ?? FF`, x64) both have "fixed" nibbles that are actually
+  bits of the *specific registers* whatever binary the pattern was
+  reverse-engineered from happened to use (register `x9` for the arm64 case,
+  `rdi` for the x64 `ModRM` byte). A `libflutter.so` built with a different
+  compiler/toolchain that allocates different registers for the same
+  computation won't match the pattern at all -- confirmed by testing against
+  a real, unmodified release APK. `resolveVerifyCertChainArm64`/`X64` now
+  scan for the mnemonic (`adrp`, or `lea` with a RIP-relative operand)
+  directly via Capstone and validate the *computed target address*, which is
+  register-allocation-agnostic. This also makes the original script's
+  alibaba.com-specific pattern variant unnecessary -- a register-agnostic
+  scan already covers whatever register a different build happens to use.
+
+### Known limitation: GetSockAddr can resolve to the wrong function on some builds
+
+After the three fixes above, one specific test app (see docs/relatorio's
+validation log) still installs hooks successfully -- `verify_cert_chain` and
+`GetSockAddr` both "resolve" and the TLS bypass works -- but the socket
+rewrite never fires for its real network requests, even after forcing a
+brand new connection (confirmed by toggling Wi-Fi off/on before retrying, to
+rule out a reused keep-alive connection). Two other apps (one tested by the
+developer, one a real production app tested independently by the project's
+author against their own client's app) work end-to-end with the exact same
+code, including full captured, decrypted traffic.
+
+The likely explanation: `GetSockAddr`'s address is derived by walking forward
+from `Socket_CreateConnect` and taking the target of the *2nd* `bl`
+instruction (mirroring the original script exactly). On a build whose
+`Socket_CreateConnect` has a different number of calls before the real
+`GetSockAddr` call (a plausible compiler/engine-version difference), that
+walk lands on a function that happens to *look* like a sockaddr-filling
+routine (same prologue shape, writes a family value at offset 0, zeroes a
+`sockaddr_storage`-sized buffer) without being the one actually invoked for
+outbound TCP connections in that build. This wasn't chased further: pinning
+it down requires reversing that specific build's full `Socket_CreateConnect`
+call graph, with no guarantee of a quick answer, and the test app in
+question isn't load-bearing for the project (see the development report).
 
 ## Config file
 

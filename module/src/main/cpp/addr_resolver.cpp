@@ -63,21 +63,32 @@ BytePattern compile_pointer_pattern(uintptr_t addr) {
 
 // arm64: locate the adrp/add pair that materializes the address of the
 // "ssl_client" string, then backtrace to the enclosing function's prologue
-// (sub sp, sp, #N ; stp|str ...). Mirrors the "ssl_client_adrp_add" branch
-// of flutter+burp.js exactly, including that later matches overwrite earlier
-// ones (there is no early break in the original onMatch/onComplete flow).
+// (sub sp, sp, #N ; stp|str ...).
+//
+// The original script identifies candidate adrp/add pairs with a fixed byte
+// pattern ("?9 ?? ?? ?0 29 ?? ?? 91", with a second variant hardcoded for
+// com.alibaba.intl.android.apps.poseidon). That pattern isn't actually
+// architecture-generic: several of its "fixed" nibbles are bits of the
+// *specific registers* the compiler happened to allocate in whatever build
+// the pattern was reverse-engineered from (confirmed by testing against a
+// real APK compiled with a newer toolchain, which uses different registers
+// for the same computation and silently fails to match at all). Instead,
+// this scans for the adrp mnemonic directly (architecturally register-
+// agnostic) and validates the actual computed target address via Capstone,
+// which finds the correct xref regardless of register allocation -- making
+// the alibaba-specific pattern variant unnecessary.
 uintptr_t resolveVerifyCertChainArm64(csh handle, const MappedModule &mod, const ElfSegments &segs,
-                                       uintptr_t sslClientAddr, const std::string &pkg) {
-    std::string patternStr = "?9 ?? ?? ?0 29 ?? ?? 91";
-    if (pkg == "com.alibaba.intl.android.apps.poseidon") {
-        patternStr = "?9 ?? ?? ?0 ?? ?? ?? ?? 29 ?? ?? 91";
-    }
-    BytePattern pat = compile_pattern(patternStr);
+                                       uintptr_t sslClientAddr) {
     uintptr_t textBase = mod.base + segs.text_vaddr;
-    auto matches = scan_all_matches(textBase, segs.text_memsz, pat);
+    uintptr_t textEnd = textBase + segs.text_memsz;
+    uintptr_t targetPage = sslClientAddr & ~static_cast<uintptr_t>(0xFFF);
 
     uintptr_t result = 0;
-    for (uintptr_t matchAddr : matches) {
+    for (uintptr_t matchAddr = textBase; matchAddr + 4 <= textEnd; matchAddr += 4) {
+        uint32_t word = 0;
+        if (!safe_read(&word, reinterpret_cast<void *>(matchAddr), sizeof(word))) continue;
+        if ((word & 0x9F000000) != 0x90000000) continue; // cheap adrp prefilter (register-agnostic)
+
         int64_t adrpTarget = 0;
         bool gotAdrp = disasmOne(handle, matchAddr, [&](cs_insn &insn) {
             if (strcmp(insn.mnemonic, "adrp") != 0 || !insn.detail) return false;
@@ -89,7 +100,7 @@ uintptr_t resolveVerifyCertChainArm64(csh handle, const MappedModule &mod, const
             }
             return false;
         });
-        if (!gotAdrp) continue;
+        if (!gotAdrp || static_cast<uintptr_t>(adrpTarget) != targetPage) continue;
 
         int64_t addImm = 0;
         auto tryAdd = [&](uintptr_t addr) {
@@ -128,24 +139,35 @@ uintptr_t resolveVerifyCertChainArm64(csh handle, const MappedModule &mod, const
     return result;
 }
 
-// x64: locate `lea rdi, [rip+disp]` referencing the "ssl_client" string, then
+// x64: locate `lea reg, [rip+disp]` referencing the "ssl_client" string, then
 // brute-force step backwards one byte at a time (exactly like the original
 // script's try/catch loop) looking for `push rbp` immediately followed by
 // `push r15`.
+//
+// Same register-allocation caveat as the arm64 path applies here: the
+// original script's byte pattern ("48 8d 3d ?? ?? ?? FF") hardcodes ModRM
+// byte 0x3d, which fixes the LEA's destination register to rdi specifically
+// (the REG field of ModRM). A REX.W + LEA-opcode prefilter plus a Capstone
+// operand check (register-agnostic) replaces it.
 uintptr_t resolveVerifyCertChainX64(csh handle, const MappedModule &mod, const ElfSegments &segs,
                                      uintptr_t sslClientAddr) {
-    BytePattern pat = compile_pattern("48 8d 3d ?? ?? ?? FF");
     uintptr_t textBase = mod.base + segs.text_vaddr;
-    auto matches = scan_all_matches(textBase, segs.text_memsz, pat);
+    uintptr_t textEnd = textBase + segs.text_memsz;
 
     uintptr_t result = 0;
-    for (uintptr_t matchAddr : matches) {
+    for (uintptr_t matchAddr = textBase; matchAddr + 2 <= textEnd; matchAddr += 1) {
+        uint8_t prefix[2];
+        if (!safe_read(prefix, reinterpret_cast<void *>(matchAddr), sizeof(prefix))) continue;
+        // REX.W, optionally with REX.R for an r8-r15 destination, then the LEA opcode.
+        if ((prefix[0] != 0x48 && prefix[0] != 0x4C) || prefix[1] != 0x8D) continue;
+
         int64_t disp = 0;
         uint64_t ripValue = 0;
         bool gotLea = disasmOne(handle, matchAddr, [&](cs_insn &insn) {
             if (strcmp(insn.mnemonic, "lea") != 0 || !insn.detail) return false;
             for (int i = 0; i < insn.detail->x86.op_count; i++) {
-                if (insn.detail->x86.operands[i].type == X86_OP_MEM) {
+                if (insn.detail->x86.operands[i].type == X86_OP_MEM &&
+                    insn.detail->x86.operands[i].mem.base == X86_REG_RIP) {
                     disp = insn.detail->x86.operands[i].mem.disp;
                     ripValue = insn.address + insn.size;
                     return true;
@@ -268,7 +290,8 @@ bool resolve_addresses(const MappedModule &mod, const ElfSegments &segs, const s
         closeHandles(cs);
         return false;
     }
-    verifyCertChain = resolveVerifyCertChainArm64(cs.arm64, mod, segs, sslClientAddr, package_name);
+    (void)package_name; // no longer needed -- see resolveVerifyCertChainArm64's comment
+    verifyCertChain = resolveVerifyCertChainArm64(cs.arm64, mod, segs, sslClientAddr);
 #elif defined(__x86_64__)
     if (!cs.x86_ok) {
         ft_log_error("resolver: failed to open capstone (x86_64)");

@@ -11,13 +11,18 @@
 
 struct MappedModule {
     uintptr_t base = 0;
+    // The linker's own name for the module. When the APK was built with
+    // extractNativeLibs=false (the modern Android/AGP default), the library
+    // is mapped directly out of the APK's zip and this is a synthetic path
+    // like ".../base.apk!/lib/arm64-v8a/libflutter.so" rather than a real,
+    // independently openable file -- see parse_elf_segments().
     std::string path;
-    dev_t dev = 0;
-    ino_t inode = 0;
 };
 
-// Scans /proc/self/maps for the first mapping whose path ends with
-// `name_suffix` (e.g. "libflutter.so"). Returns false if not currently loaded.
+// Finds the loaded module whose linker name ends with `name_suffix` (e.g.
+// "libflutter.so") via dl_iterate_phdr, which reports the correct load base
+// regardless of whether the library was extracted to its own file or is
+// mapped directly out of the APK. Returns false if not currently loaded.
 bool find_module_by_suffix(const char *name_suffix, MappedModule &out);
 
 struct ElfSegments {
