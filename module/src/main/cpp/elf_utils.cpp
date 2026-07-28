@@ -6,7 +6,6 @@
 #include <link.h>
 #include <unistd.h>
 
-#include <cstdio>
 #include <cstring>
 
 #include "log.h"
@@ -178,5 +177,12 @@ bool parse_elf_segments(const MappedModule &mod, ElfSegments &out) {
     }
 
     if (fd >= 0) close(fd);
+
+    // Without this, a phdr table we failed to make sense of still reports
+    // success with an all-zero result, and the real cause resurfaces later as
+    // the misleading "'ssl_client' string not found" from the resolver.
+    if (!foundTextSegment) {
+        ft_log_warn("elf: no executable PT_LOAD found in %s", mod.path.c_str());
+    }
     return true;
 }

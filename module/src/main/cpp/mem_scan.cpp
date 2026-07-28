@@ -1,8 +1,11 @@
 // FlutterTap native module -- by Eduardo Lopes
 #include "mem_scan.h"
 
+#include <pthread.h>
+
 #include <csetjmp>
 #include <csignal>
+#include <cstdlib>
 #include <cstring>
 #include <sstream>
 
@@ -10,8 +13,49 @@
 
 namespace {
 
-thread_local sigjmp_buf g_jmpBuf;
-thread_local volatile sig_atomic_t g_guardActive = 0;
+// Per-thread state for the guarded-read machinery. Deliberately pthread
+// thread-specific data rather than `thread_local`: a thread_local makes the
+// compiler emit dynamic-TLS relocations (R_AARCH64_TLSDESC on arm64,
+// R_X86_64_DTPMOD64 on x86_64), and Zygisk Next's optional "Zygisk Next
+// Linker" preloads modules with its own minimal ELF loader that never
+// registers a TLS block for us -- the first access to a thread_local then
+// segfaults, in every single hooked process. pthread_get/setspecific are
+// ordinary libc calls (plain JUMP_SLOT relocations), so they behave
+// identically under the system linker and under that minimal loader.
+// See docs/ARCHITECTURE.md.
+struct GuardState {
+    sigjmp_buf jmpBuf;
+    volatile sig_atomic_t active;
+};
+
+pthread_key_t g_guardKey;
+pthread_once_t g_guardKeyOnce = PTHREAD_ONCE_INIT;
+// Also read from the signal handler, so kept signal-safe: a plain
+// sig_atomic_t, no std::atomic and no locking.
+volatile sig_atomic_t g_guardKeyReady = 0;
+
+void freeGuardState(void *state) { free(state); }
+
+void createGuardKey() {
+    if (pthread_key_create(&g_guardKey, freeGuardState) == 0) g_guardKeyReady = 1;
+}
+
+// Allocates on first use per thread. Never call this from the signal handler:
+// malloc isn't async-signal-safe. safe_read() calls it *before* arming the
+// guard, so by the time the handler runs the state already exists.
+GuardState *guardState() {
+    pthread_once(&g_guardKeyOnce, createGuardKey);
+    if (!g_guardKeyReady) return nullptr;
+    auto *state = static_cast<GuardState *>(pthread_getspecific(g_guardKey));
+    if (state == nullptr) {
+        state = static_cast<GuardState *>(calloc(1, sizeof(GuardState)));
+        if (state != nullptr && pthread_setspecific(g_guardKey, state) != 0) {
+            free(state);
+            state = nullptr;
+        }
+    }
+    return state;
+}
 
 struct sigaction g_oldSegv {};
 struct sigaction g_oldBus {};
@@ -32,9 +76,13 @@ void invokeOld(const struct sigaction &old, int sig, siginfo_t *info, void *ctx)
 }
 
 void segvHandler(int sig, siginfo_t *info, void *ctx) {
-    if (g_guardActive) {
-        g_guardActive = 0;
-        siglongjmp(g_jmpBuf, 1);
+    if (g_guardKeyReady) {
+        // Read-only lookup, no allocation: safe to do from a signal handler.
+        auto *state = static_cast<GuardState *>(pthread_getspecific(g_guardKey));
+        if (state != nullptr && state->active) {
+            state->active = 0;
+            siglongjmp(state->jmpBuf, 1);
+        }
     }
     // Not one of our guarded reads: don't swallow a real crash, chain to
     // whatever handler (Dart VM / crash reporter / default) was there before.
@@ -52,17 +100,30 @@ int hexNibble(char c) {
 } // namespace
 
 bool safe_read(void *dst, const void *src, size_t n) {
-    if (sigsetjmp(g_jmpBuf, 1) != 0) {
-        g_guardActive = 0;
+    GuardState *state = guardState();
+    // No per-thread guard available (allocation failed): fail closed rather
+    // than attempt an unguarded read that could take down the host app.
+    if (state == nullptr) return false;
+    if (sigsetjmp(state->jmpBuf, 1) != 0) {
+        state->active = 0;
         return false;
     }
-    g_guardActive = 1;
+    state->active = 1;
     memcpy(dst, src, n);
-    g_guardActive = 0;
+    state->active = 0;
     return true;
 }
 
 void mem_scan_install_crash_guard() {
+    // Idempotent on purpose: a second call would capture *our own* handler as
+    // "the old handler", and invokeOld() would then recurse into segvHandler
+    // forever on the first non-guarded SIGSEGV.
+    static bool installed = false;
+    if (installed) return;
+    installed = true;
+
+    pthread_once(&g_guardKeyOnce, createGuardKey);
+
     struct sigaction sa {};
     sa.sa_sigaction = segvHandler;
     sa.sa_flags = SA_SIGINFO;

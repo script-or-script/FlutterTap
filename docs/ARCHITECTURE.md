@@ -7,6 +7,11 @@ TLS pinning and redirects a Flutter app's outgoing connections to a proxy) into 
 persistent **Zygisk** module, so the same capability works under Magisk, KernelSU
 (with Zygisk/Zygisk Next) or APatch without a tethered `frida-server`.
 
+Throughout this document and the source comments, "the original script" means
+that Frida script. It is the author's own and is **not** included in this
+repository -- the comments describe how each piece of its behavior was ported,
+so they stand on their own without it.
+
 ## Why Zygisk
 
 The original script hooks three things inside the target app's process:
@@ -61,26 +66,74 @@ The original script is meant for a single, short-lived, human-supervised Frida
 session. FlutterTap runs unattended, for the app's entire lifetime, so a few
 things were hardened without changing what actually happens on the wire:
 
-- **Thread-local captured sockaddr** instead of a single global, so concurrent
-  connections on different threads can't race with each other (`hooks.cpp`).
+- **Per-thread captured sockaddr** instead of a single global, so concurrent
+  connections on different threads can't interleave (`hooks.cpp`). Implemented
+  with pthread thread-specific data rather than `thread_local` -- see
+  [Zygisk Next Linker compatibility](#zygisk-next-linker-compatibility).
 - **SIGSEGV/SIGBUS guard** around every heuristic memory read
   (`mem_scan_install_crash_guard`), so a bad scan result logs and gives up
   instead of crashing the host app. The guard chains to whatever handler was
   already installed (Dart VM, crash reporter, ...) for anything that isn't one
-  of FlutterTap's own guarded reads.
+  of FlutterTap's own guarded reads. It is installed **only from a confirmed
+  target process** (`runHookPipeline`), never from `onLoad()` -- the reason is
+  in the same section linked above.
 - **Zero footprint on non-target apps.** `preAppSpecialize` decides whether the
   current process is one of the user-selected target packages *before* doing
   any work, and calls `zygisk::Option::DLCLOSE_MODULE_LIBRARY` to unload
   itself immediately for every app the user didn't select.
-- **`socket()` hooked via Dobby directly (`dlsym` + `DobbyHook`), not
-  `zygisk::Api::pltHookRegister`.** The Zygisk API object stops working right
-  after `post[XXX]Specialize` returns, but `libflutter.so` (and therefore the
-  earliest point these addresses can even be resolved) only loads well after
-  that, during normal app startup. A background thread polls
-  `/proc/self/maps` for `libflutter.so` (mirroring the script's own
+- **`socket()` hooked via Dobby directly (explicit `libc.so` handle +
+  `DobbyHook`), not `zygisk::Api::pltHookRegister`.** The Zygisk API object
+  stops working right after `postAppSpecialize` returns, but `libflutter.so`
+  (and therefore the earliest point these addresses can even be resolved) only
+  loads well after that, during normal app startup. A background thread polls
+  `dl_iterate_phdr` for `libflutter.so` (mirroring the script's own
   `awaitForCondition`/`setInterval` polling loop) and only then resolves
   addresses and installs hooks -- entirely through Dobby, which has no such
   lifecycle restriction.
+
+## Zygisk Next Linker compatibility
+
+Zygisk Next has an optional "Zygisk Next Linker" that replaces the system
+linker with its own minimal ELF loader and **preloads modules directly into
+zygote** at boot. It has been on by default since Zygisk Next 1.3.3. Three
+things in FlutterTap had to change for it, all of them real bugs that were
+merely latent under the classic per-process `dlopen`:
+
+1. **The crash guard must not be installed in `onLoad()`.** Under the ZN Linker
+   `onLoad()` runs *in zygote*, and signal dispositions survive `fork()`, so a
+   handler installed there is inherited by every app on the device. Non-target
+   processes then call `DLCLOSE_MODULE_LIBRARY`, unmapping the library while
+   the kernel still holds a handler address pointing into it. ART raises benign
+   `SIGSEGV`s routinely (implicit null checks, stack-overflow guard pages), so
+   every app died on its first one -- SystemUI included. The guard is now
+   installed from `runHookPipeline()`, which only runs in a confirmed target
+   process that stays loaded. **Rule: nothing that mutates process-global state
+   belongs in `onLoad()`.**
+
+2. **`dlsym(RTLD_DEFAULT, ...)` returns `null`.** `RTLD_DEFAULT` (and
+   `RTLD_NEXT`) makes bionic derive the lookup scope from the *calling* library
+   by mapping the return address back to a linker `soinfo`. A module mapped by
+   the ZN Linker has no `soinfo`, so that lookup fails. `resolveLibcSocket()`
+   in `hooks.cpp` uses an explicit `dlopen("libc.so", RTLD_NOW|RTLD_NOLOAD)`
+   handle instead, which needs no caller lookup and works under both loaders.
+   Note the contrast: `dl_iterate_phdr` works fine, because Zygisk Next
+   redirects it to its own implementation that does see app libraries.
+
+3. **No `thread_local`.** It emits dynamic-TLS relocations
+   (`R_AARCH64_TLSDESC`, `R_X86_64_DTPMOD64`). The ZN Linker has supported TLS
+   relocations since 1.4.0, but the TLS path still needed fixes in 1.4.1, so
+   the three former `thread_local`s use pthread thread-specific data instead --
+   ordinary libc calls that every loader resolves identically.
+   `scripts/build_module_zip.sh` fails the build if a TLS relocation reappears.
+
+Worth recording because it cost real debugging time: the ZN Linker wiki's
+"Unimplemented features" list has its first three items **struck through**
+(implemented in 1.3.0-RC4 and 1.4.0). Markdown-to-text conversion drops the
+strikethrough, making RELR, Android packed relocations and TLS look
+unsupported. Only GNU symbol versioning is genuinely unimplemented -- and that
+one is harmless in practice, since every NDK-built `.so` carries `@LIBC`
+`VERNEED` entries and the ZN Linker loads them fine by resolving symbols
+version-agnostically. Do not waste time stripping `VERNEED`.
 
 ## Real-device findings that changed the original script's approach
 
@@ -195,8 +248,9 @@ Standard Magisk module layout, understood the same way by Magisk, KernelSU
 
 - **Capstone 5.0.9** (BSD-3), vendored as a git submodule, built with only
   `CAPSTONE_ARM64_SUPPORT`/`CAPSTONE_X86_SUPPORT` enabled. Unmodified.
-- **Dobby** (Apache-2.0), vendored as a git submodule pinned to commit
-  `e9fe7fb` (2023-04-21) rather than the upstream default branch HEAD.
+- **Dobby** (Apache-2.0), vendored as a git submodule pinned to a small local
+  patch (`patches/dobby-android-build.patch`) on top of upstream commit
+  `e9fe7fb` (2023-04-21), rather than the upstream default branch HEAD.
   Upstream's HEAD (as of this writing, last commit 2024-03-14) has several
   unresolved regressions in its Linux/Android backend (`RuntimeModule.base`
   vs. `.load_address`, `MemRange.start` field vs. `start()` accessor) --

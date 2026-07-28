@@ -1,14 +1,12 @@
 // FlutterTap native module -- by Eduardo Lopes
 #include "companion.h"
 
-#include <fcntl.h>
-#include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <cerrno>
 #include <cstdint>
 #include <cstdio>
-#include <vector>
 
 #include "log.h"
 
@@ -42,9 +40,23 @@ bool readFull(int fd, void *buf, size_t size) {
     return true;
 }
 
+// stdio is fine here -- a small regular file, none of the partial-transfer or
+// EINTR concerns that the socket path above has to handle.
 std::string readConfigFile() {
     FILE *f = fopen(kConfigPath, "rb");
-    if (!f) return "";
+    if (!f) {
+        // Without this, the most common real-world failure (module installed
+        // but never configured, or the config unreadable) produces no logcat
+        // output at all and looks identical to "configured, no apps selected".
+        // Logged once: the companion is a long-lived root daemon and this runs
+        // on every app launch, so an unconditional warning would spam logcat.
+        static bool warned = false;
+        if (!warned) {
+            warned = true;
+            ft_log_warn("companion: cannot read %s (errno %d)", kConfigPath, errno);
+        }
+        return "";
+    }
     std::string content;
     char buf[4096];
     size_t n;

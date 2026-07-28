@@ -11,4 +11,17 @@ build/
 .kotlin/
 dist/
 *.apk
-*.zip
+/dist/*.zip
+
+# Signing material -- must never be committed.
+*.jks
+*.keystore
+*.p12
+
+# Editor / OS noise
+.vscode/
+.DS_Store
+.claude/
+
+# Personal development notes, not product documentation.
+docs/SESSION_PROMPTS.md

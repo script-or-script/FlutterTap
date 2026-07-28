@@ -2,9 +2,15 @@
 
 ## Requirements
 
-- Android Studio (or just the Android SDK/NDK + JDK 17+)
+- Android Studio (or just the Android SDK/NDK + a JDK, see below)
+- **JDK 17 or 21.** Not newer: Gradle 8.11.1 cannot parse the version string of
+  JDK 22+ and fails with `IllegalArgumentException: <version>` before compiling
+  anything. If your system default `java` is newer, point Gradle at Android
+  Studio's bundled JBR, e.g.
+  `export JAVA_HOME="C:/Program Files/Android/Android Studio/jbr"`.
 - NDK `27.2.12479018` (or newer; set `ndkVersion` in `module/build.gradle.kts`
-  if you use a different one)
+  if you use a different one). Both `llvm-strip` and `llvm-readelf` from the
+  NDK toolchain are used by the packaging script.
 - CMake `3.22.1` (bundled with the Android SDK)
 - Git (the two native dependencies are git submodules)
 
@@ -56,10 +62,25 @@ FlutterTap-<version>.zip
 ├── module.prop
 ├── customize.sh
 ├── uninstall.sh
+├── action.sh
+├── licenses/
+│   ├── FlutterTap-LICENSE-MIT.txt
+│   ├── Dobby-LICENSE-Apache-2.0.txt
+│   ├── Capstone-LICENSE-BSD-3.txt
+│   └── Capstone-LICENSE-LLVM.txt
 └── zygisk/
     ├── arm64-v8a.so
     └── x86_64.so
 ```
+
+The script also **fails the build if `llvm-readelf` finds any TLS relocation**
+in either `.so`. That is a guard against reintroducing `thread_local`, which
+the Zygisk Next Linker handles differently from the system linker -- see
+`docs/ARCHITECTURE.md`. Use pthread thread-specific data instead.
+
+`licenses/` is shipped because Dobby (Apache-2.0) and Capstone (BSD-3) are
+statically linked into the `.so` files, and both licenses require their terms
+to accompany binary redistribution. See [`THIRD_PARTY.md`](../THIRD_PARTY.md).
 
 ## Notes on architecture support
 

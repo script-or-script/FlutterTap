@@ -1,5 +1,4 @@
-// FlutterTap -- native Zygisk module
-// by Eduardo Lopes
+// FlutterTap native module -- by Eduardo Lopes
 //
 // Ports flutter+burp.js (a Flutter/BoringSSL TLS-pinning bypass + traffic
 // redirector originally built for Frida) into a persistent Zygisk module so
@@ -32,12 +31,21 @@ struct MonitorContext {
     ModuleConfig cfg;
 };
 
-void runHookPipeline(const std::string &processName, const ModuleConfig &cfg) {
-    MappedModule flutterMod;
-    if (!find_module_by_suffix(kFlutterLib, flutterMod)) {
-        ft_log_warn("%s: libflutter.so not found after waiting, giving up", processName.c_str());
-        return;
-    }
+void runHookPipeline(const std::string &processName, const ModuleConfig &cfg, const MappedModule &flutterMod) {
+    // Installed here, not in onLoad(): the guard registers a process-wide
+    // SIGSEGV/SIGBUS handler pointing into this library, so it must only ever
+    // be installed in a process we actually stay loaded in. onLoad() runs
+    // before we know whether this process is a target, and non-targets
+    // DLCLOSE us in preAppSpecialize -- which used to leave the kernel with a
+    // handler address inside a freshly unmapped library. Under Zygisk Next's
+    // "Zygisk Next Linker" that was fatal system-wide rather than merely
+    // latent: it preloads modules into zygote, so onLoad() ran in zygote and
+    // every forked app inherited the dangling handler (signal dispositions
+    // survive fork). ART raises benign SIGSEGVs routinely -- implicit null
+    // checks, stack-overflow guard pages -- so every app died on its first
+    // one, SystemUI included.
+    mem_scan_install_crash_guard();
+
     ft_log_info("%s: libflutter.so loaded at 0x%zx (%s)", processName.c_str(), flutterMod.base,
                 flutterMod.path.c_str());
 
@@ -63,9 +71,9 @@ void runHookPipeline(const std::string &processName, const ModuleConfig &cfg) {
 void *monitorThreadMain(void *arg) {
     std::unique_ptr<MonitorContext> ctx(static_cast<MonitorContext *>(arg));
 
-    MappedModule probe;
+    MappedModule flutterMod;
     int attempts = 0;
-    while (!find_module_by_suffix(kFlutterLib, probe)) {
+    while (!find_module_by_suffix(kFlutterLib, flutterMod)) {
         if (++attempts > kMaxPollAttempts) {
             ft_log_warn("%s: timed out waiting for libflutter.so", ctx->processName.c_str());
             return nullptr;
@@ -73,7 +81,7 @@ void *monitorThreadMain(void *arg) {
         usleep(kPollIntervalUs);
     }
 
-    runHookPipeline(ctx->processName, ctx->cfg);
+    runHookPipeline(ctx->processName, ctx->cfg, flutterMod);
     return nullptr;
 }
 
@@ -84,7 +92,6 @@ public:
     void onLoad(zygisk::Api *api, JNIEnv *env) override {
         api_ = api;
         env_ = env;
-        mem_scan_install_crash_guard();
     }
 
     void preAppSpecialize(zygisk::AppSpecializeArgs *args) override {
@@ -97,7 +104,12 @@ public:
                 env_->ReleaseStringUTFChars(args->nice_name, niceName);
             }
         }
-        if (processName_.empty()) return;
+        if (processName_.empty()) {
+            // Same reasoning as the !shouldHook_ path below: nothing to do in
+            // this process, so don't stay mapped in it.
+            api_->setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+            return;
+        }
 
         // The companion connection (and therefore this whole config fetch) is
         // only valid here, before the sandbox is applied -- must not be

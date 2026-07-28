@@ -2,10 +2,14 @@
 //
 // Port of the address-resolution logic in flutter+burp.js: given libflutter.so's
 // loaded segments, locate (a) the BoringSSL cert-chain verification function
-// and (b) the Flutter engine's internal GetSockAddr function, using the same
-// string-xref + instruction-pattern approach as the original script (arm64:
-// adrp/add pairs; x64: rip-relative lea), disassembled with Capstone -- the
-// same engine backing Frida's Instruction.parse.
+// and (b) the Flutter engine's internal GetSockAddr function.
+//
+// It keeps the original script's string-xref strategy (arm64: adrp/add pairs;
+// x64: rip-relative lea) but deliberately does NOT reuse its instruction byte
+// patterns: those bake in whichever registers the reference binary's compiler
+// happened to pick, so they break on other builds. Instead the scan matches
+// mnemonics via Capstone -- the same disassembler backing Frida's
+// Instruction.parse. See addr_resolver.cpp for the full reasoning.
 #pragma once
 
 #include <cstdint>

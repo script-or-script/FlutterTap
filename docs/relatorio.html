@@ -9,6 +9,7 @@
   h1 { font-size: 22pt; color: #0D47A1; border-bottom: 3px solid #0D47A1; padding-bottom: 8px; }
   h2 { font-size: 15pt; color: #0D47A1; margin-top: 28px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
   h3 { font-size: 12.5pt; color: #333; margin-top: 18px; }
+  h4 { font-size: 11pt; color: #0D47A1; margin-top: 16px; margin-bottom: 4px; }
   .cover { text-align: center; padding-top: 140px; page-break-after: always; }
   .cover h1 { border: none; font-size: 30pt; }
   .cover .subtitle { font-size: 14pt; color: #555; margin-top: 10px; }
@@ -483,7 +484,316 @@ distribuir prontos, o caminho padrão é anexá-los a uma <em>Release</em> do Gi
   <li><strong>Forçar parada e reabrir o app-alvo</strong> — o hook só entra em processos novos.</li>
 </ol>
 
-<h2>12. Próximos passos</h2>
+<h3>11.3 Configuração manual via <code>config.json</code> (sem o app gerenciador)</h3>
+<p>
+O app gerenciador é apenas uma interface para um único arquivo JSON. Quem preferir automatizar (script de
+provisionamento, CI de testes, aparelho sem tela) pode escrever esse arquivo diretamente e obter exatamente o
+mesmo resultado — o módulo não sabe nem se importa com quem escreveu.
+</p>
+<pre>/data/adb/fluttertap/config.json</pre>
+<div class="box">
+O caminho fica <strong>deliberadamente fora</strong> do diretório do módulo (<code>$MODPATH</code>). Duas
+consequências práticas: a configuração <strong>sobrevive a atualizações e reinstalações</strong> do módulo, e o
+<code>uninstall.sh</code> <strong>não apaga</strong> esse arquivo de propósito — quem desinstalar e reinstalar
+recupera o IP/porta e a lista de apps exatamente como estavam.
+</div>
+<pre>{
+  "enabled": true,
+  "proxy_ip": "192.168.15.13",
+  "proxy_port": 8083,
+  "target_packages": ["com.exemplo.app", "com.outro.app"]
+}</pre>
+<table>
+  <tr><th>Chave</th><th>Default se ausente</th><th>Observação</th></tr>
+  <tr><td><code>enabled</code></td><td><code>true</code></td>
+      <td>Interruptor geral: <code>false</code> desliga a interceptação sem apagar a lista de apps.</td></tr>
+  <tr><td><code>proxy_ip</code></td><td><code>203.0.113.1</code></td>
+      <td>RFC 5737 (TEST-NET-3), reservado para documentação. Escolhido justamente por <em>não poder</em>
+          colidir com um endereço real, tornando óbvio que ainda não foi configurado.</td></tr>
+  <tr><td><code>proxy_port</code></td><td><code>8083</code></td><td>Mesmo valor do script original.</td></tr>
+  <tr><td><code>target_packages</code></td><td><code>[]</code></td>
+      <td>Lista vazia significa <strong>nada é interceptado</strong>.</td></tr>
+</table>
+
+<h4>Como a correspondência é feita</h4>
+<p>
+A comparação é contra o <strong>nome do processo</strong> (o <code>nice_name</code> do Zygisk), não
+estritamente o nome do pacote, e segue duas regras:
+</p>
+<ol>
+  <li><strong>Igualdade exata</strong> com uma entrada da lista.</li>
+  <li><strong>Subprocessos nomeados do mesmo app:</strong> listar <code>com.exemplo.app</code> também captura
+      <code>com.exemplo.app:remote</code>, <code>:isolate</code> e afins.</li>
+</ol>
+<p>
+A segunda regra é relevante na prática porque parte dos apps Flutter executa o trabalho de rede em um
+subprocesso nomeado — não é preciso listá-los separadamente.
+</p>
+
+<h4>Quando o arquivo é lido</h4>
+<div class="ok">
+O processo <em>companion</em> (root) lê o arquivo <strong>do disco, do zero, a cada especialização de
+processo</strong> — não existe cache em nenhuma camada. Portanto <strong>não é necessário reiniciar o aparelho
+nem reinstalar o módulo</strong> após uma alteração:
+<ol>
+  <li>editar o <code>config.json</code>;</li>
+  <li><code>am force-stop</code> no app-alvo;</li>
+  <li>reabrir o app.</li>
+</ol>
+O <code>force-stop</code> não é opcional: o hook só é aplicado a processos <strong>recém-criados</strong>, de
+modo que um app já em execução continua sem interceptação.
+</div>
+
+<h4>Editando na prática</h4>
+<p>
+O arquivo está sob <code>/data/adb</code>, então exige root. Permissões esperadas: diretório <code>755</code>,
+arquivo <code>644</code>, dono <code>root</code>.
+</p>
+<pre># Opção A — pipe + tee, sem arquivo intermediário
+adb shell "echo '{\"enabled\":true,\"proxy_ip\":\"192.168.1.10\",\"proxy_port\":8080,\
+\"target_packages\":[\"com.exemplo.app\"]}' | su -c 'tee /data/adb/fluttertap/config.json'"
+adb shell su -c "am force-stop com.exemplo.app"
+
+# Opção B — escrever local e enviar (melhor para JSON formatado/legível)
+adb push config.json /data/local/tmp/config.json
+adb shell su -c "cp /data/local/tmp/config.json /data/adb/fluttertap/config.json"
+adb shell su -c "chmod 644 /data/adb/fluttertap/config.json"</pre>
+<div class="warn">
+<strong>Armadilha de shell:</strong> <code>adb shell su -c "cat &gt; /data/adb/..."</code> falha com
+<em>Permission denied</em>, porque o redirecionamento <code>&gt;</code> é executado pelo shell
+<strong>externo</strong> (sem root), e não pelo <code>su</code>. Use <code>tee</code> ou <code>cp</code>, como
+nos exemplos acima.
+</div>
+
+<h4>Dois modos de falha silenciosa</h4>
+<div class="warn">
+<strong>1. JSON inválido não gera erro visível.</strong> Se o parse falhar, o módulo assume os valores padrão
+por inteiro — e o padrão de <code>target_packages</code> é lista vazia. O resultado é que uma vírgula sobrando
+faz o módulo simplesmente não interceptar nada, sem nenhuma mensagem. Valide o JSON antes de concluir que algo
+está quebrado.<br><br>
+<strong>2. Nome do pacote não é o nome do app.</strong> Convém consultar em vez de supor:
+<pre>adb shell pm list packages | grep -i ostorlab
+# co.ostorlab.ostorlab_insecure_flutter_app.host   &lt;- note o sufixo .host</pre>
+</div>
+<p>
+Para confirmar que a configuração foi aceita, acompanhe o log do módulo:
+</p>
+<pre>adb logcat -s FlutterTap:V</pre>
+<p>
+O esperado é <code>selected for hooking</code> seguido de
+<code>hooks installed for ... -&gt; proxy IP:PORTA</code>. Se <strong>nada</strong> aparecer, a causa é uma
+destas três: o nome não corresponde ao processo, o JSON é inválido, ou o app já estava em execução quando a
+configuração mudou.
+</p>
+
+<h2 class="page-break">12. Compatibilidade com o Zygisk Next Linker (guia para autores de módulos)</h2>
+<p>
+O FlutterTap era, entre os módulos usados no aparelho de teste, o único que conflitava com o recurso
+<strong>Zygisk Next Linker</strong> — com o recurso ativo, o aparelho subia e ficava com a tela preta. O
+diagnóstico revelou <strong>dois bugs reais no próprio módulo</strong> (não incompatibilidades de formato do
+binário), ambos latentes e inofensivos sob o Zygisk tradicional, mas fatais sob esse loader. Como as duas
+armadilhas são genéricas e podem afetar qualquer módulo Zygisk, esta seção documenta o diagnóstico completo
+para reaproveitamento por outros desenvolvedores.
+</p>
+<p>
+Ambiente onde tudo abaixo foi verificado: Pixel 8a, Android 17, SukiSu Ultra (fork do KernelSU) com
+<strong>Zygisk Next 1.4.3</strong> e a opção Zygisk Next Linker ativa. Após as correções, o módulo funciona
+com o linker ligado, com captura de tráfego real confirmada no proxy.
+</p>
+
+<h3>12.1 A diferença que causa tudo</h3>
+<p>
+O Zygisk Next Linker substitui o linker do sistema por um <strong>loader ELF próprio e minimalista</strong>,
+que pré-carrega os módulos diretamente no <code>zygote</code> durante o boot. Ele está
+<strong>ativo por padrão desde a versão 1.3.3</strong>, ou seja, não é mais um recurso opcional de nicho.
+</p>
+<div class="box">
+<strong>A diferença crucial de ciclo de vida:</strong>
+<ul>
+  <li><strong>Zygisk tradicional (linker do sistema):</strong> a <code>.so</code> do módulo é carregada com
+      <code>dlopen</code> <em>em cada processo de app, depois do fork</em>. O <code>onLoad()</code> roda no
+      processo do app.</li>
+  <li><strong>Zygisk Next Linker:</strong> a <code>.so</code> é carregada <em>uma vez, no zygote</em>. O
+      <code>onLoad()</code> roda <strong>no zygote</strong>, e o que ele fizer é
+      <strong>herdado por todo app que nascer dali</strong>.</li>
+</ul>
+Praticamente todo problema desta seção decorre dessa mudança: código que era isolado em um único processo
+passa a afetar o sistema inteiro.
+</div>
+
+<h3>12.2 Armadilha 1: handler de sinal global + DLCLOSE (a mais grave)</h3>
+<p>
+Este foi o bug que travava o aparelho. O módulo instalava um handler de <code>SIGSEGV</code>/<code>SIGBUS</code>
+no <code>onLoad()</code> (para proteger varreduras de memória), <strong>antes</strong> de saber se aquele
+processo era alvo. Processos não-alvo então chamavam <code>DLCLOSE_MODULE_LIBRARY</code> para se
+descarregarem — mas o handler <strong>continuava registrado no kernel, apontando para uma biblioteca que
+acabara de ser desmapeada</strong>.
+</p>
+<div class="warn">
+<strong>Por que é apenas latente no Zygisk tradicional e catastrófico sob o ZN Linker:</strong> no primeiro
+caso o ponteiro pendurado fica confinado àquele app e só mata o processo se ele receber um sinal. No segundo,
+o <code>onLoad()</code> roda no zygote, e <strong>disposições de sinal sobrevivem ao <code>fork()</code></strong>
+— então <em>todo</em> app nasce com o handler pendurado. E o ART levanta <code>SIGSEGV</code> benigno como
+mecanismo normal de operação (verificação implícita de ponteiro nulo, página de guarda de stack overflow),
+de modo que todo app morre no primeiro deles. Inclusive o SystemUI: daí a tela preta.
+</div>
+<pre>// ERRADO — handler global instalado antes de saber se o processo é alvo
+void onLoad(zygisk::Api *api, JNIEnv *env) override {
+    install_crash_guard();               // sob ZN Linker, isto roda no zygote
+}
+void preAppSpecialize(AppSpecializeArgs *args) override {
+    if (!isTarget(...))
+        api-&gt;setOption(zygisk::DLCLOSE_MODULE_LIBRARY);
+    // a biblioteca é desmapeada, mas o handler segue registrado apontando para ela
+}</pre>
+<pre>// CORRETO — instalar só em processo-alvo confirmado, onde o módulo permanece carregado
+void onLoad(zygisk::Api *api, JNIEnv *env) override {
+    api_ = api; env_ = env;              // nada invasivo aqui
+}
+void postAppSpecialize(const AppSpecializeArgs *args) override {
+    if (!shouldHook_) return;            // não-alvos já se descarregaram
+    install_crash_guard();               // agora é seguro
+}</pre>
+<div class="box">
+<strong>Regra geral:</strong> nada que altere estado global do processo — handlers de sinal, hooks inline em
+libc, <code>atexit</code>, threads — deve ser feito no <code>onLoad()</code>. Sob o ZN Linker isso é
+efetivamente "fazer no zygote, para todos os apps do sistema". Se o módulo pode se descarregar via
+<code>DLCLOSE_MODULE_LIBRARY</code>, então <strong>qualquer</strong> ponteiro que o processo guarde para
+dentro dele (handler de sinal, callback registrado, thread em execução) tem de ser removido antes.
+</div>
+
+<h3>12.3 Armadilha 2: <code>dlsym(RTLD_DEFAULT, ...)</code> retorna <code>null</code></h3>
+<p>
+Corrigido o travamento, o módulo carregava e os hooks no <code>libflutter.so</code> instalavam, mas o
+redirecionamento de tráfego parava de funcionar. O log apontou um único ponto de falha: a resolução de
+<code>socket()</code> da libc via <code>dlsym(RTLD_DEFAULT, "socket")</code> retornava <code>null</code>.
+</p>
+<p>
+Motivo: com <code>RTLD_DEFAULT</code> (e igualmente <code>RTLD_NEXT</code>), o bionic determina o escopo de
+busca a partir da <strong>biblioteca chamadora</strong> — ele mapeia o endereço de retorno de volta para um
+<code>soinfo</code> do linker. Como a <code>.so</code> foi mapeada pelo loader próprio do ZN Linker, o linker
+do sistema <strong>não tem registro algum dela</strong>, essa busca falha e <code>dlsym</code> devolve
+<code>null</code>. Um handle explícito não depende dessa etapa.
+</p>
+<pre>// ERRADO — retorna null quando o módulo foi mapeado pelo ZN Linker
+void *addr = dlsym(RTLD_DEFAULT, "socket");</pre>
+<pre>// CORRETO — handle explícito dispensa a resolução pela biblioteca chamadora
+void *addr = nullptr;
+if (void *libc = dlopen("libc.so", RTLD_NOW | RTLD_NOLOAD)) {  // libc já está sempre mapeada
+    addr = dlsym(libc, "socket");
+    dlclose(libc);
+}
+if (addr == nullptr)                                  // fallback: Zygisk tradicional
+    addr = dlsym(RTLD_DEFAULT, "socket");</pre>
+<p>
+Vale notar o contraste: <code>dl_iterate_phdr</code> <strong>funciona</strong> normalmente — o Zygisk Next o
+redireciona para uma implementação interna própria que enxerga corretamente as bibliotecas do app (o módulo
+usa isso para localizar o <code>libflutter.so</code>, inclusive em APKs com
+<code>extractNativeLibs=false</code>). O problema é específico das formas de <code>dlsym</code> que dependem
+do chamador.
+</p>
+
+<h3>12.4 Falso culpado: relocations e symbol versioning</h3>
+<div class="warn">
+<strong>Esta subseção existe para poupar tempo de quem for investigar o mesmo problema.</strong> A página
+"Zygisk Next Linker" da wiki lista quatro "Unimplemented features", e a leitura ingênua dessa lista custou
+um diagnóstico errado e um patch inútil neste projeto.
+</div>
+<p>
+Os três primeiros itens da lista estão <strong>tachados</strong> (<code>~~texto~~</code> no markdown), cada um
+com link para a versão que os implementou. O tachado aparece no HTML renderizado, mas
+<strong>desaparece silenciosamente</strong> em qualquer conversão de markdown para texto puro — restando uma
+lista que parece dizer que nada disso é suportado. Situação real:
+</p>
+<table>
+  <tr><th>Recurso ELF</th><th>Situação</th><th>Desde</th></tr>
+  <tr><td>Relocation de TLS</td><td>Suportado</td><td>1.4.0</td></tr>
+  <tr><td>Android packed relocation (<code>DT_ANDROID_REL/RELA</code>)</td><td>Suportado</td><td>1.3.0-RC4</td></tr>
+  <tr><td>RELR relative relocation (<code>DT_RELR</code>)</td><td>Suportado</td><td>1.3.0-RC4</td></tr>
+  <tr><td><strong>GNU Symbol Versioning</strong> (<code>DT_VERNEED</code>)</td><td><strong>Não implementado</strong></td><td>—</td></tr>
+</table>
+<p>
+E mesmo o versionamento de símbolos, na prática, <strong>não é o que quebra módulos</strong>: toda
+<code>.so</code> compilada com NDK moderno carrega entradas <code>VERNEED</code> contra
+<code>libc.so</code>/<code>libdl.so</code> (visíveis como sufixos <code>@LIBC</code> nos símbolos importados),
+e ainda assim o ZN Linker vem ativo por padrão carregando a maioria dos módulos — logo ele tolera essas
+entradas, resolvendo símbolos por nome e ignorando a versão. O bionic não tem, na prática, múltiplas versões
+do mesmo símbolo que exigissem discriminação.
+</p>
+<div class="box">
+<strong>Conclusão prática:</strong> não gaste tempo removendo <code>VERNEED</code> com
+<code>patchelf --clear-version-requirement</code> ou LIEF, nem desativando RELR/packed relocations por flag
+de link. Nada disso era o problema aqui. Procure primeiro por <strong>estado global do processo</strong>
+(seção 12.2) e por <strong>dependência do chamador em APIs <code>dl*</code></strong> (seção 12.3).
+</div>
+<p>
+Como reforço opcional (defesa em profundidade, não correção), este projeto também trocou os três
+<code>thread_local</code> que possuía por <em>thread-specific data</em> do pthread
+(<code>pthread_key_create</code> / <code>pthread_getspecific</code> / <code>pthread_setspecific</code>).
+Um <code>thread_local</code> gera relocations de TLS dinâmico (<code>R_AARCH64_TLSDESC</code>,
+<code>R_X86_64_DTPMOD64</code>) — suportadas desde a 1.4.0, mas o caminho de TLS ainda recebeu correções na
+1.4.1. As funções do pthread são chamadas comuns de libc, resolvidas por relocations triviais que qualquer
+loader trata de forma idêntica. O <code>scripts/build_module_zip.sh</code> passou a falhar o build se alguma
+relocation de TLS dinâmico reaparecer no binário.
+</p>
+
+<h3>12.5 Como diagnosticar (ferramentas que realmente ajudaram)</h3>
+<table>
+  <tr><th>Ferramenta / sinal</th><th>Para que serve</th></tr>
+  <tr>
+    <td><code>ksud module list</code> (campo <code>description</code> do <code>zygisksu</code>)</td>
+    <td>Mostra o estado do Zygisk Next em tempo real, incl. o flag <code>ZL</code> (linker ativo). Desde a
+        1.4.1 <strong>falhas de carregamento de módulo aparecem aqui</strong> e na WebUI — confira isso
+        antes de teorizar.</td>
+  </tr>
+  <tr>
+    <td><code>zygiskd linker &lt;system|builtin&gt;</code><br><small>em
+        <code>/data/adb/modules/zygisksu/bin/</code></small></td>
+    <td>Alterna entre o linker do sistema e o ZN Linker <strong>em tempo real, sem reinstalar</strong> —
+        ideal para provar que um bug é específico de um dos dois loaders.</td>
+  </tr>
+  <tr>
+    <td><code>/data/tombstones/</code></td>
+    <td>Relatórios nativos de crash. O campo <code>Process uptime</code> diz <em>quando</em> o processo
+        morreu, o que ajuda a separar "falhou ao carregar no boot" de "morreu em uso".</td>
+  </tr>
+  <tr>
+    <td>Log do módulo via <code>logcat -s SuaTag:V</code></td>
+    <td>Foi o que localizou a Armadilha 2 com precisão: todo o pipeline aparecia funcionando e uma única
+        linha de erro apontava o ponto exato. <strong>Vale logar qual caminho de resolução funcionou</strong>,
+        não só que falhou.</td>
+  </tr>
+  <tr>
+    <td><code>llvm-readelf -d / -r / --dyn-syms</code></td>
+    <td>Inventário do binário: tags dinâmicas, tipos de relocation e símbolos importados. Útil para
+        <em>descartar</em> hipóteses de formato ELF rapidamente.</td>
+  </tr>
+  <tr>
+    <td>Zygisk Next 1.4.3+: atribuição de crash por módulo e exportação de bugreport
+        (<code>/data/local/tmp/zygisknext-bugreport-*/</code>)</td>
+    <td>A própria Zygisk Next passa a apontar qual módulo causou um crash do sistema.</td>
+  </tr>
+</table>
+<div class="warn">
+<strong>Duas armadilhas de diagnóstico encontradas na prática:</strong><br>
+<strong>1. O <code>dmesg</code> é praticamente inútil aqui.</strong> O buffer circular do kernel (1024 KB)
+dá a volta em poucos minutos de uptime — os logs do carregamento de módulos no boot já foram sobrescritos
+quando alguém vai olhar. Use tombstones e o log do próprio módulo.<br>
+<strong>2. Ausência de crash em um teste curto não prova nada.</strong> Um "conserto" chegou a ser declarado
+funcional após alguns minutos de aparelho ligado e ocioso; o travamento real só apareceu cerca de 40 minutos
+depois, quando apps passaram a ser abertos de fato. Esta classe de bug só se manifesta quando o
+<em>caminho de falha</em> executa — no caso, quando o ART levanta um <code>SIGSEGV</code> rotineiro. Exercite
+o caminho real (abrir, trocar e reabrir apps) antes de considerar corrigido.
+</div>
+<p>
+Por fim, um detalhe de infraestrutura de teste que economiza tempo: um módulo protetor de bootloop (como o
+<em>Yet Another Bootloop Protector</em>) funciona como excelente rede de segurança nesses testes, porque
+desativa o módulo culpado sozinho e devolve o aparelho utilizável em vez de deixá-lo em tela preta.
+Mantenha o <strong>seu</strong> módulo <em>fora</em> da allowlist dele enquanto testa — é justamente ele que
+você quer que seja desativado automaticamente se algo der errado.
+</p>
+
+<h2>13. Próximos passos</h2>
 <ol>
   <li class="ok" style="list-style:none; margin-left:-20px; padding:6px 10px;">✔ Testar o módulo em um dispositivo real contra um app Flutter conhecido e validar a captura de
       tráfego no Burp Suite — <strong>concluído</strong> (seção 10), incluindo confirmação independente

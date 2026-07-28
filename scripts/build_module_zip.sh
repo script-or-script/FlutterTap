@@ -23,12 +23,41 @@ cp module/template/uninstall.sh "$STAGE_DIR/"
 cp module/template/action.sh "$STAGE_DIR/"
 chmod 755 "$STAGE_DIR/action.sh"
 
+# `|| true` on every `find ... | head -1`: under `set -e` with `pipefail`, `head`
+# closing the pipe early can SIGPIPE `find` (status 141) even on success, and a
+# non-matching glob would abort the script instead of reaching the `-z`/`-n`
+# checks these lookups exist to feed.
 find_so() {
   local abi="$1"
-  find module/build/intermediates/cxx -type f -path "*/obj/${abi}/libfluttertap.so" | head -1
+  find module/build/intermediates/cxx -type f -path "*/obj/${abi}/libfluttertap.so" 2>/dev/null | head -1 || true
 }
 
-STRIP_BIN="$(find "${ANDROID_NDK_HOME:-$HOME/AppData/Local/Android/Sdk/ndk}"/*/toolchains/llvm/prebuilt/*/bin -maxdepth 1 -iname "llvm-strip*" 2>/dev/null | head -1)"
+# NDK location, in order of preference: explicit env vars, then the default SDK
+# path for each host OS (Windows/Linux/macOS).
+find_ndk_tool() {
+  local name="$1" root
+  for root in "${ANDROID_NDK_HOME:-}" "${ANDROID_NDK_ROOT:-}" \
+              "${ANDROID_SDK_ROOT:-}/ndk" "${ANDROID_HOME:-}/ndk" \
+              "$HOME/AppData/Local/Android/Sdk/ndk" \
+              "$HOME/Android/Sdk/ndk" \
+              "$HOME/Library/Android/sdk/ndk"; do
+    [ -n "$root" ] && [ -d "$root" ] || continue
+    local hit
+    # Depth 8 covers both a versioned SDK ndk/ root and ANDROID_NDK_HOME
+    # pointing straight at one NDK version directory.
+    hit="$(find "$root" -maxdepth 8 -type f -iname "${name}*" -path "*/llvm/prebuilt/*/bin/*" 2>/dev/null | head -1 || true)"
+    if [ -n "$hit" ]; then echo "$hit"; return 0; fi
+  done
+  return 0
+}
+
+STRIP_BIN="$(find_ndk_tool llvm-strip)"
+READELF_BIN="$(find_ndk_tool llvm-readelf)"
+if [ -z "$READELF_BIN" ]; then
+  echo "ERROR: llvm-readelf not found in any NDK; cannot verify the built .so." >&2
+  echo "       Set ANDROID_NDK_HOME, or see docs/BUILD.md." >&2
+  exit 1
+fi
 
 for abi in arm64-v8a x86_64; do
   so_path="$(find_so "$abi")"
@@ -42,7 +71,26 @@ for abi in arm64-v8a x86_64; do
     "$STRIP_BIN" --strip-unneeded "$dest"
   fi
   echo "  - ${abi}.so <- $so_path ($(du -h "$dest" | cut -f1))"
+
+  # Guard against silently reintroducing thread_local: TLS relocations are what
+  # the Zygisk Next Linker's minimal ELF loader is least likely to handle
+  # identically to the system linker. Use pthread TSD instead (see the note in
+  # mem_scan.cpp).
+  if "$READELF_BIN" -r "$dest" 2>/dev/null | grep -qE "TLSDESC|DTPMOD|TPOFF|TPREL"; then
+    echo "ERROR: ${abi}.so contains TLS relocations -- use pthread TSD, not thread_local" >&2
+    exit 1
+  fi
 done
+
+# Apache-2.0 (Dobby) requires the license to accompany binary distributions, and
+# Capstone's BSD-3 requires its copyright notice to be reproduced. Both are
+# statically linked into the .so files above, so they ship with the zip.
+echo "==> Bundling third-party licenses"
+mkdir -p "$STAGE_DIR/licenses"
+cp module/src/main/cpp/third_party/dobby/LICENSE "$STAGE_DIR/licenses/Dobby-LICENSE-Apache-2.0.txt"
+cp module/src/main/cpp/third_party/capstone/LICENSE.TXT "$STAGE_DIR/licenses/Capstone-LICENSE-BSD-3.txt"
+cp module/src/main/cpp/third_party/capstone/LICENSE_LLVM.TXT "$STAGE_DIR/licenses/Capstone-LICENSE-LLVM.txt"
+cp LICENSE "$STAGE_DIR/licenses/FlutterTap-LICENSE-MIT.txt"
 
 mkdir -p "$DIST_DIR"
 ZIP_PATH="$DIST_DIR/FlutterTap-${VERSION}.zip"

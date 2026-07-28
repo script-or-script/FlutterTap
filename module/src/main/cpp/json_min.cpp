@@ -11,6 +11,18 @@ public:
     explicit Parser(const std::string &text) : s(text), pos(0), len(text.size()) {}
 
     bool parseValue(JsonValue &out) {
+        // Bounded recursion: parseValue -> parseObject/parseArray -> parseValue
+        // is otherwise unlimited, and this parser runs inside *every* app
+        // process. A config.json with a few hundred thousand '[' would overflow
+        // the stack in each of them -- i.e. one bad file bricks every app on
+        // the device until it is fixed over adb. Real configs nest 2 deep.
+        struct DepthGuard {
+            int &d;
+            explicit DepthGuard(int &counter) : d(counter) { ++d; }
+            ~DepthGuard() { --d; }
+        } guard(depth);
+        if (depth > kMaxDepth) return false;
+
         skipWs();
         if (pos >= len) return false;
         char c = s[pos];
@@ -24,9 +36,12 @@ public:
     }
 
 private:
+    static constexpr int kMaxDepth = 32;
+
     const std::string &s;
     size_t pos;
     size_t len;
+    int depth = 0;
 
     void skipWs() {
         while (pos < len && (s[pos] == ' ' || s[pos] == '\t' || s[pos] == '\n' || s[pos] == '\r')) pos++;

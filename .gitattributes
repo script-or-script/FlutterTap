@@ -1,0 +1,27 @@
+# Scripts here are executed by Android's `sh` (customize.sh / uninstall.sh /
+# action.sh run inside the Magisk/KernelSU/APatch installer and module manager).
+# A CR at end of line makes that shell treat it as part of the token, so a
+# CRLF checkout silently breaks module installation. Git for Windows enables
+# core.autocrlf by default, so these must be pinned to LF explicitly.
+*.sh text eol=lf
+gradlew text eol=lf
+module.prop text eol=lf
+
+# Keep the rest normalized to LF in the repository, converted per-platform on
+# checkout only where it is harmless.
+*.cpp text
+*.h text
+*.kt text
+*.kts text
+*.md text
+*.xml text
+*.pro text
+
+# Never touched by line-ending conversion.
+*.png binary
+*.jpg binary
+*.pdf binary
+*.jar binary
+*.apk binary
+*.zip binary
+*.so binary

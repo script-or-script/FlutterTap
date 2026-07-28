@@ -10,14 +10,20 @@
 
 // Installs a SIGSEGV/SIGBUS guard so a bad computed address (e.g. a scan
 // landing on a partial/incorrectly classified page) logs and aborts the scan
-// instead of crashing the host app process. Call once, early, from the
-// module's onLoad. Not present in the original one-shot Frida script (Frida's
-// JS runtime already isolates crashes) but necessary here since we run
-// in-process for the whole app lifetime.
+// instead of crashing the host app process. Not present in the original
+// one-shot Frida script (Frida's JS runtime already isolates crashes) but
+// necessary here since we run in-process for the whole app lifetime.
+//
+// Call once per process, and ONLY from a process this library stays loaded in
+// for good -- i.e. a confirmed hook target, never from onLoad(). The handler
+// address points into this library, so installing it in a process that later
+// DLCLOSEs us leaves the kernel jumping into unmapped memory on the next
+// signal. See the call site in main.cpp for why that was fatal under the
+// Zygisk Next Linker.
 void mem_scan_install_crash_guard();
 
 // Guarded memcpy: returns false (instead of crashing) if `src` turns out to
-// be unreadable. Shared by mem_scan.cpp and addr_resolver.cpp.
+// be unreadable. Shared by mem_scan.cpp, addr_resolver.cpp and hooks.cpp.
 bool safe_read(void *dst, const void *src, size_t n);
 
 // value/mask pairs: for byte i, memory matches iff (memory[i] & mask[i]) == (value[i] & mask[i]).

@@ -51,7 +51,7 @@ bool disasmOne(csh handle, uintptr_t addr, Fn &&fn) {
     return ok;
 }
 
-BytePattern compile_pointer_pattern(uintptr_t addr) {
+BytePattern compilePointerPattern(uintptr_t addr) {
     BytePattern p;
     for (int i = 0; i < 8; i++) {
         p.value.push_back(static_cast<uint8_t>((addr >> (i * 8)) & 0xFF));
@@ -60,6 +60,12 @@ BytePattern compile_pointer_pattern(uintptr_t addr) {
     return p;
 }
 
+// The four helpers below come in arm64/x64 pairs, each called from an
+// #if/#elif on __aarch64__/__x86_64__ -- so whichever ABI is being built leaves
+// the other two unreferenced, hence [[maybe_unused]]. They are not dead code:
+// both bodies are kept in every build so the arm64 and x64 rationale stay
+// readable side by side.
+//
 // arm64: locate the adrp/add pair that materializes the address of the
 // "ssl_client" string, then backtrace to the enclosing function's prologue
 // (sub sp, sp, #N ; stp|str ...).
@@ -76,6 +82,7 @@ BytePattern compile_pointer_pattern(uintptr_t addr) {
 // agnostic) and validates the actual computed target address via Capstone,
 // which finds the correct xref regardless of register allocation -- making
 // the alibaba-specific pattern variant unnecessary.
+[[maybe_unused]]
 uintptr_t resolveVerifyCertChainArm64(csh handle, const MappedModule &mod, const ElfSegments &segs,
                                        uintptr_t sslClientAddr) {
     uintptr_t textBase = mod.base + segs.text_vaddr;
@@ -148,6 +155,7 @@ uintptr_t resolveVerifyCertChainArm64(csh handle, const MappedModule &mod, const
 // byte 0x3d, which fixes the LEA's destination register to rdi specifically
 // (the REG field of ModRM). A REX.W + LEA-opcode prefilter plus a Capstone
 // operand check (register-agnostic) replaces it.
+[[maybe_unused]]
 uintptr_t resolveVerifyCertChainX64(csh handle, const MappedModule &mod, const ElfSegments &segs,
                                      uintptr_t sslClientAddr) {
     uintptr_t textBase = mod.base + segs.text_vaddr;
@@ -203,6 +211,11 @@ uintptr_t resolveVerifyCertChainX64(csh handle, const MappedModule &mod, const E
     return result;
 }
 
+// Returns the target address of the `targetCount`-th `bl` found within
+// kMaxWalk bytes of funcAddr, or 0 if there aren't that many. arm64 steps 4
+// bytes at a time (fixed-width instructions); the x64 twin below has to step
+// one byte at a time and therefore uses a wider window.
+[[maybe_unused]]
 uintptr_t walkBlCountArm64(csh handle, uintptr_t funcAddr, int targetCount) {
     int count = 0;
     constexpr uint32_t kMaxWalk = 0x2000;
@@ -229,6 +242,7 @@ uintptr_t walkBlCountArm64(csh handle, uintptr_t funcAddr, int targetCount) {
 
 // Mirrors the original script's byte-by-byte `call` counting on x64 (it does
 // not step by proper instruction length there either).
+[[maybe_unused]]
 uintptr_t walkCallCountX64(csh handle, uintptr_t funcAddr, int targetCount) {
     int count = 0;
     constexpr uint32_t kMaxWalk = 0x8000;
@@ -261,8 +275,9 @@ bool resolve_addresses(const MappedModule &mod, const ElfSegments &segs, Resolve
         return false;
     }
 
+    // NUL-terminated ASCII, hex-encoded: "ssl_client" and "Socket_CreateConnect".
     BytePattern sslClientPat = compile_pattern("73 73 6C 5F 63 6C 69 65 6E 74 00");
-    BytePattern socketCcPat = compile_pattern("53 6f 63 6b 65 74 5f 43 72 65 61 74 65 43 6f 6e 6e 65 63 74 00");
+    BytePattern socketCcPat = compile_pattern("53 6F 63 6B 65 74 5F 43 72 65 61 74 65 43 6F 6E 6E 65 63 74 00");
 
     auto sslClientMatches = scan_all_matches(mod.base, segs.rodata_memsz, sslClientPat);
     auto socketCcMatches = scan_all_matches(mod.base, segs.rodata_memsz, socketCcPat);
@@ -314,7 +329,7 @@ bool resolve_addresses(const MappedModule &mod, const ElfSegments &segs, Resolve
         return false;
     }
 
-    BytePattern ptrPat = compile_pointer_pattern(socketCcStringAddr);
+    BytePattern ptrPat = compilePointerPattern(socketCcStringAddr);
     auto relroMatches = scan_all_matches(mod.base + segs.relro_vaddr, segs.relro_memsz, ptrPat);
     if (relroMatches.empty()) {
         ft_log_warn("resolver: Socket_CreateConnect pointer not found in PT_GNU_RELRO");
@@ -323,6 +338,9 @@ bool resolve_addresses(const MappedModule &mod, const ElfSegments &segs, Resolve
     }
     uintptr_t slotAddr = relroMatches.back();
 
+    // The RELRO slot matched above holds the *name* pointer of a Dart native
+    // function table entry; the entry's function pointer sits 0x10 bytes
+    // earlier in the same entry. Same layout the original script relies on.
     uintptr_t socketCreateConnectFunc = 0;
     if (!safe_read(&socketCreateConnectFunc, reinterpret_cast<void *>(slotAddr - 0x10),
                     sizeof(socketCreateConnectFunc))) {
@@ -331,11 +349,14 @@ bool resolve_addresses(const MappedModule &mod, const ElfSegments &segs, Resolve
         return false;
     }
 
+    // GetSockAddr is the 2nd call made inside Socket_CreateConnect -- same
+    // index the original script walks to.
+    constexpr int kGetSockAddrCallIndex = 2;
     uintptr_t getSockAddr = 0;
 #if defined(__aarch64__)
-    getSockAddr = walkBlCountArm64(cs.arm64, socketCreateConnectFunc, 2);
+    getSockAddr = walkBlCountArm64(cs.arm64, socketCreateConnectFunc, kGetSockAddrCallIndex);
 #elif defined(__x86_64__)
-    getSockAddr = walkCallCountX64(cs.x86, socketCreateConnectFunc, 2);
+    getSockAddr = walkCallCountX64(cs.x86, socketCreateConnectFunc, kGetSockAddrCallIndex);
 #endif
 
     closeHandles(cs);

@@ -8,8 +8,11 @@ ui_print "- FlutterTap"
 ui_print "  by Eduardo Lopes"
 ui_print "- Extracting module files"
 
-# Standard Magisk/KernelSU/APatch module layout extraction.
-unzip -o "$ZIPFILE" -x 'META-INF/*' -d "$MODPATH" >&2
+# Standard Magisk/KernelSU/APatch module layout extraction. With SKIPUNZIP=1
+# this is the only thing that puts the payload in place, so a silent failure
+# here would "install" an empty module that does nothing.
+unzip -o "$ZIPFILE" -x 'META-INF/*' -d "$MODPATH" >&2 || abort "! Failed to extract module files"
+[ -f "$MODPATH/zygisk/arm64-v8a.so" ] || abort "! Module payload is missing after extraction"
 
 if [ -n "$KSU" ]; then
   ui_print "- Detected KernelSU"
@@ -37,6 +40,7 @@ if [ ! -f "$CONFIG_FILE" ]; then
   "target_packages": []
 }
 EOF
+  ui_print "- No target apps are selected by default."
 else
   ui_print "- Existing configuration preserved"
 fi
@@ -44,8 +48,9 @@ fi
 chmod 755 "$CONFIG_DIR"
 chmod 644 "$CONFIG_FILE"
 
-ui_print "- No target apps are selected by default."
 ui_print "- Open the FlutterTap manager app to choose apps and proxy IP/port."
 
 set_perm_recursive "$MODPATH" 0 0 0755 0644
-set_perm_recursive "$MODPATH/zygisk" 0 0 0755 0644
+# action.sh is invoked by the module manager's "Action" button; the recursive
+# call above would otherwise leave it 0644.
+set_perm "$MODPATH/action.sh" 0 0 0755

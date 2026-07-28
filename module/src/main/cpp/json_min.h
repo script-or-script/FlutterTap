@@ -21,7 +21,6 @@ struct JsonValue {
     std::map<std::string, JsonValue> objValue;
 
     bool isObject() const { return type == Type::Object; }
-    bool isArray() const { return type == Type::Array; }
 
     // Convenience accessors used by module_config.cpp. Return the provided
     // default when the key is missing or has an unexpected type.

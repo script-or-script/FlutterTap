@@ -4,8 +4,6 @@
 // branch only -- the original script's MachO/iOS branch does not apply here).
 #pragma once
 
-#include <sys/types.h>
-
 #include <cstdint>
 #include <string>
 
@@ -41,7 +39,10 @@ struct ElfSegments {
     uint64_t relro_memsz = 0;
 };
 
-// Parses the 64-bit ELF program headers of `mod` (reading from the mapped
-// memory first, falling back to reading the backing file for any field that
-// comes back as zero, exactly like the original script's fallback path).
+// Parses the 64-bit ELF program headers of `mod`, reading from the mapped
+// memory first. When e_phnum, p_type or p_flags read back as zero, those
+// specific fields are re-read from the backing file (the original script's
+// fallback path) -- except for a library mapped straight out of an APK, where
+// there is no independently openable file and the fallback is skipped
+// entirely. See parse_elf_segments() in elf_utils.cpp.
 bool parse_elf_segments(const MappedModule &mod, ElfSegments &out);

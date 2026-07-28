@@ -217,9 +217,14 @@ private fun StatusBullet(text: String, positive: Boolean) {
 
 @Composable
 private fun ProxyCard(config: ConfigData, onSave: (ConfigData) -> Unit) {
-    var enabled by remember { mutableStateOf(config.enabled) }
-    var ipText by remember { mutableStateOf(config.proxyIp) }
-    var portText by remember { mutableStateOf(config.proxyPort.toString()) }
+    // Keyed on the individual fields, not on `config` itself: ticking an app
+    // checkbox replaces the whole ConfigData object, and keying on that would
+    // wipe a half-typed IP mid-edit. Keying on nothing at all was worse -- the
+    // card kept showing the placeholder defaults captured before root was
+    // granted, so pressing Save overwrote the real saved proxy IP with them.
+    var enabled by remember(config.enabled) { mutableStateOf(config.enabled) }
+    var ipText by remember(config.proxyIp) { mutableStateOf(config.proxyIp) }
+    var portText by remember(config.proxyPort) { mutableStateOf(config.proxyPort.toString()) }
     var ipError by remember { mutableStateOf(false) }
     var portError by remember { mutableStateOf(false) }
 
@@ -295,7 +300,13 @@ private fun ProxyCard(config: ConfigData, onSave: (ConfigData) -> Unit) {
 private fun isValidIpv4(value: String): Boolean {
     val parts = value.split(".")
     if (parts.size != 4) return false
-    return parts.all { part -> part.toIntOrNull()?.let { it in 0..255 } == true && part.isNotEmpty() }
+    // Digits only, checked explicitly: toIntOrNull() accepts a leading sign, so
+    // "192.168.+1.1" and "10.0.-0.5" used to pass validation and get written to
+    // config.json, where the native side then fails to parse them and silently
+    // stops redirecting.
+    return parts.all { part ->
+        part.length in 1..3 && part.all(Char::isDigit) && part.toInt() in 0..255
+    }
 }
 
 private data class LanguageOption(val tag: String?, val labelRes: Int)

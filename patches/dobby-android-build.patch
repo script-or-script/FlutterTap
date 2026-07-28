@@ -1,0 +1,129 @@
+From 025e9fc2fe1c603288dd554fa9a2e0b671388c86 Mon Sep 17 00:00:00 2001
+From: Eduardo Lopes <eduardo.lopes@berghem.com.br>
+Date: Sun, 26 Jul 2026 06:24:56 -0300
+Subject: [PATCH] Local patch: fix Android build (see docs/ARCHITECTURE.md in
+ FlutterTap)
+
+- logging.h: add missing 'inline' on out-of-line Logger::Shared()
+  definition, which caused duplicate-symbol link errors whenever
+  dobby_static is linked into a real binary.
+- CMakeLists.txt: skip the unused shared 'dobby' target on Android,
+  since it fails to link for the same reason and nothing here uses it
+  (only dobby_static is linked).
+---
+ CMakeLists.txt                     | 53 ++++++++++++++++++------------
+ external/logging/logging/logging.h |  6 +++-
+ 2 files changed, 37 insertions(+), 22 deletions(-)
+
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 6907a14..a26f44c 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -299,13 +299,19 @@ set(SOURCE_FILE_LIST
+ get_absolute_path_list(SOURCE_FILE_LIST SOURCE_FILE_LIST_)
+ set(SOURCE_FILE_LIST ${SOURCE_FILE_LIST_})
+ 
+-add_library(dobby SHARED
+-  ${SOURCE_FILE_LIST}
+-  )
++# The shared "dobby" target fails to link on Android with this NDK/lld
++# (duplicate C++17 inline-variable symbols for Logger::Shared()); every
++# consumer here only needs dobby_static, so skip building it there.
++# (local patch for the Android build, see docs/ARCHITECTURE.md)
++if (NOT ANDROID)
++  add_library(dobby SHARED
++    ${SOURCE_FILE_LIST}
++    )
+ 
+-target_include_directories(dobby PUBLIC
+-  include
+-  )
++  target_include_directories(dobby PUBLIC
++    include
++    )
++endif ()
+ 
+ # ---
+ 
+@@ -323,20 +329,21 @@ set_target_properties(dobby_static
+ 
+ # ---
+ 
+-set_target_properties(dobby
+-  PROPERTIES
+-  LINK_FLAGS "${linker_flags}"
+-  COMPILE_FLAGS "${compiler_flags}"
+-  )
++if (NOT ANDROID)
++  set_target_properties(dobby
++    PROPERTIES
++    LINK_FLAGS "${linker_flags}"
++    COMPILE_FLAGS "${compiler_flags}"
++    )
++  target_compile_definitions(dobby PRIVATE
++    "COMPILE_DEFINITIONS ${compile_definitions}"
++    )
++endif ()
+ 
+ set_target_properties(dobby_static
+   PROPERTIES
+   COMPILE_FLAGS "${compiler_flags}"
+   )
+-
+-target_compile_definitions(dobby PRIVATE
+-  "COMPILE_DEFINITIONS ${compile_definitions}"
+-  )
+ target_compile_definitions(dobby_static PRIVATE
+   "COMPILE_DEFINITIONS ${compile_definitions}"
+   )
+@@ -350,12 +357,16 @@ endif ()
+ # ---
+ 
+ if (SYSTEM.Android)
+-  target_link_libraries(dobby log)
++  if (NOT ANDROID)
++    target_link_libraries(dobby log)
++  endif ()
+   if (PROCESSOR.ARM)
+-    set_target_properties(dobby
+-      PROPERTIES
+-      ANDROID_ARM_MODE arm
+-      )
++    if (NOT ANDROID)
++      set_target_properties(dobby
++        PROPERTIES
++        ANDROID_ARM_MODE arm
++        )
++    endif ()
+     set_target_properties(dobby_static
+       PROPERTIES
+       ANDROID_ARM_MODE arm
+@@ -363,7 +374,7 @@ if (SYSTEM.Android)
+   endif ()
+ endif ()
+ 
+-if (SYSTEM.Linux)
++if (SYSTEM.Linux AND NOT ANDROID)
+   target_link_libraries(dobby dl)
+ endif ()
+ 
+diff --git a/external/logging/logging/logging.h b/external/logging/logging/logging.h
+index 54da382..24b5e8c 100644
+--- a/external/logging/logging/logging.h
++++ b/external/logging/logging/logging.h
+@@ -137,7 +137,11 @@ public:
+ };
+ 
+ inline static Logger gLogger;
+-Logger *Logger::Shared() {
++// Missing `inline` here made every translation unit emit its own strong
++// definition of this out-of-line member function, causing duplicate-symbol
++// link errors when linking dobby_static into another target (fluttertap).
++// (local patch, see docs/ARCHITECTURE.md)
++inline Logger *Logger::Shared() {
+   return &gLogger;
+ }
+ 
+-- 
+2.53.0.windows.3
+
