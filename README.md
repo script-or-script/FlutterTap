@@ -1,245 +1,254 @@
-# FlutterTap
-
-Módulo **Zygisk** que redireciona o tráfego de rede de apps **Flutter** selecionados para um proxy
-configurável e contorna a verificação de certificado TLS (SSL pinning) do BoringSSL — sem instalar
-certificado no aparelho, sem recompilar o app e sem depender de uma sessão do Frida conectada por USB.
-
-Acompanha um **app gerenciador** (Jetpack Compose) para escolher os apps-alvo e o IP/porta do proxy
-direto no celular.
-
 <p align="center">
-  <img src="docs/screenshots/pixel8a-android17/5-bypass-app2.png" alt="Tráfego HTTPS de um app Flutter capturado e descriptografado no Burp Suite">
-</p>
-<p align="center">
-  <em>Tráfego HTTPS de um app Flutter chegando descriptografado ao Burp — sem certificado CA instalado no aparelho.</em>
+  <img src="docs/assets/banner.png" alt="FlutterTap — Zygisk module for intercepting Flutter app traffic">
 </p>
 
-## Por que existe
+<p align="center">
+  <b>English</b> ·
+  <a href="README.pt-BR.md">Português (BR)</a> ·
+  <a href="README.zh-CN.md">中文</a>
+</p>
 
-Apps feitos em Flutter não usam a pilha de TLS do Android: o engine embute o **BoringSSL** e mantém a
-própria cadeia de confiança. Na prática, isso significa que instalar o certificado CA do Burp no sistema
-**não intercepta nada** — o app ignora o repositório de certificados do Android por completo. E como o
-Flutter também não respeita o proxy configurado no Wi-Fi, o tráfego simplesmente sai pela rede sem passar
-pelo seu interceptador.
+A **Zygisk** module that redirects the network traffic of selected **Flutter** apps to a configurable
+proxy and bypasses BoringSSL's TLS certificate verification — with no certificate installed on the
+device, no app repackaging, and no Frida session tethered over USB.
 
-A técnica para contornar isso é conhecida, mas normalmente exige rodar um script Frida com o
-`frida-server` ativo e o cabo conectado, a cada sessão. O FlutterTap transforma essa mesma abordagem em um
-módulo persistente: instala uma vez, escolhe os apps, e funciona sozinho a cada boot.
+It ships with a **manager app** (Jetpack Compose) for picking target apps and setting the proxy IP/port
+directly on the phone.
 
-## Por que um módulo, e não Frida ou LSPosed
+<p align="center">
+  <img src="docs/screenshots/pixel8a-android17/5-bypass-app2.png" alt="HTTPS traffic from a Flutter app captured and decrypted in Burp Suite">
+</p>
+<p align="center">
+  <em>HTTPS traffic from a Flutter app arriving decrypted in Burp — with no CA certificate installed on the device.</em>
+</p>
 
-**Frida** é insuperável para *descobrir* como um app funciona — você edita JavaScript e vê o efeito em
-segundos. Foi assim que a técnica nasceu. O problema é *operar* com ela: depende de `frida-server` rodando
-com sessão ativa (fechou o terminal, perdeu o hook), não sobrevive a um reboot, exige capturar o processo no
-nascimento (`-f`) para pegar hooks de inicialização, e — o mais relevante num teste sério — **abre uma porta
-em escuta e deixa rastros conhecidos** (nomes de thread, strings em memória, entradas em `/proc`). Detectar
-Frida é literalmente a primeira coisa que qualquer SDK de proteção mobile faz.
+## Why it exists
 
-**LSPosed/Xposed** não é questão de conveniência, é de camada: ele hooka **métodos Java/ART**. No Flutter,
-`verify_cert_chain` e `GetSockAddr` são funções **nativas e não exportadas dentro do `libflutter.so`** — não
-existe método Java para interceptar. Um módulo LSPosed teria de fazer exatamente o mesmo trabalho nativo que
-o FlutterTap faz, carregando por cima todo o runtime do Xposed sem ganhar nada.
+Flutter apps don't use Android's TLS stack. The engine bundles its own **BoringSSL** and keeps its own
+trust chain, which means installing Burp's CA certificate on the system **intercepts nothing** — the app
+ignores the Android certificate store entirely. And since Flutter doesn't honour the Wi-Fi proxy either,
+the traffic simply leaves the device without ever passing through your interceptor.
+
+The workaround is well known, but it normally requires running a Frida script with `frida-server` active
+and a cable attached, every session. FlutterTap turns that same approach into a persistent module:
+install once, pick your apps, and it runs on its own on every boot.
+
+## Why a module, and not Frida or LSPosed
+
+**Frida** is unbeatable for *discovering* how an app works — you edit JavaScript and see the effect in
+seconds. That's how the technique was born. The problem is *operating* with it: it depends on
+`frida-server` and a live session (close the terminal, lose the hook), doesn't survive a reboot, needs
+spawn (`-f`) to catch startup hooks, and — most relevant in real engagements — **opens a listening port
+and leaves well-known artifacts** (thread names, memory strings, `/proc` entries). Detecting Frida is
+literally the first thing any mobile protection SDK does.
+
+**LSPosed/Xposed** isn't a matter of convenience but of layer: it hooks **Java/ART methods**. In Flutter,
+`verify_cert_chain` and `GetSockAddr` are **unexported native functions inside `libflutter.so`** — there
+is no Java method to intercept. An LSPosed module would have to do exactly the same native work
+FlutterTap does, while dragging in the whole Xposed runtime for nothing.
 
 |  | Frida | LSPosed | FlutterTap |
 |---|---|---|---|
-| Alcança o BoringSSL nativo | sim | **não diretamente** | sim |
-| Sobrevive a reboot | não | sim | sim |
-| Dispensa cabo/ferramenta externa | não | sim | sim |
-| Porta em escuta / processo externo | sim (detectável) | não | não |
-| Pega o app desde o primeiro instante | só com spawn manual | sim | sim |
-| Zero impacto em apps não selecionados | — | depende | sim (`DLCLOSE`) |
-| Velocidade de iteração no desenvolvimento | **excelente** | média | baixa |
+| Reaches native BoringSSL | yes | **not directly** | yes |
+| Survives a reboot | no | yes | yes |
+| No cable / external tooling | no | yes | yes |
+| Listening port / external process | yes (detectable) | no | no |
+| Catches the app from its first instant | only via manual spawn | yes | yes |
+| Zero impact on non-selected apps | — | depends | yes (`DLCLOSE`) |
+| Development iteration speed | **excellent** | medium | slow |
 
-A última linha é uma desvantagem honesta: iterar num módulo nativo é bem mais lento que editar um `.js`.
-É por isso que a divisão de trabalho faz sentido — **Frida para descobrir, módulo para operar**.
+That last row is an honest drawback: iterating on a native module is far slower than editing a `.js`.
+Which is exactly why the split makes sense — **Frida to discover, a module to operate**.
 
-### Por que foi criado
+### Why it was built
 
-A motivação vem de trabalho real de análise de tráfego mobile. Num teste de verdade o app precisa se
-comportar **naturalmente ao longo do tempo**: abrir e fechar várias vezes, receber notificação, sincronizar
-em segundo plano, ser usado por alguém que não sabe o que é Frida. E o ambiente precisa ser **reproduzível**
-— reconfigurável por qualquer pessoa marcando checkboxes, sem terminal e sem comando decorado.
+The motivation comes from real mobile traffic analysis work. In an actual engagement the app has to
+behave **naturally over time**: opened and closed repeatedly, receiving notifications, syncing in the
+background, used by someone who has never heard of Frida. And the setup has to be **reproducible** —
+reconfigurable by anyone ticking checkboxes, with no terminal and no memorised commands.
 
-O FlutterTap transforma um procedimento manual e frágil em **infraestrutura**. A seleção de apps por pacote
-existe justamente para isso: não é um interceptador global — ele fica inerte em todo app que você não
-selecionou, se descarregando da memória imediatamente, o que reduz tanto risco de efeito colateral quanto
-superfície de detecção.
+FlutterTap turns a manual, fragile procedure into **infrastructure**. Per-app targeting exists precisely
+for that: it is not a global interceptor — it stays inert in every app you didn't select, unloading
+itself from memory immediately, which reduces both the risk of side effects and the detection surface.
 
-## Como funciona
+## How it works
 
-Nenhuma das funções envolvidas é exportada, então elas precisam ser localizadas em tempo de execução, a
-cada processo:
+None of the functions involved are exported, so they have to be located at runtime, in every process:
 
-1. O módulo é carregado em cada processo de app via Zygisk e verifica se aquele pacote está na lista de
-   alvos — se não estiver, se descarrega imediatamente (zero footprint em apps não selecionados).
-2. Numa thread de monitoramento, espera o `libflutter.so` ser carregado e faz o parsing dos segmentos ELF.
-3. Procura as strings `"ssl_client"` e `"Socket_CreateConnect"` na memória e, a partir delas, resolve os
-   endereços reais de `verify_cert_chain` e `GetSockAddr` **desmontando o código com Capstone** — a mesma
-   biblioteca que o Frida usa por baixo.
-4. Instala três hooks com Dobby: captura o `sockaddr` de destino, reescreve IP/porta para o proxy, e força
-   o resultado "certificado válido".
+1. The module is loaded into each app process via Zygisk and checks whether that package is in the target
+   list — if it isn't, it unloads itself immediately (zero footprint on non-selected apps).
+2. On a monitoring thread, it waits for `libflutter.so` to load and parses its ELF segments.
+3. It scans memory for the strings `"ssl_client"` and `"Socket_CreateConnect"` and, from those, resolves
+   the real addresses of `verify_cert_chain` and `GetSockAddr` by **disassembling with Capstone** — the
+   same library Frida uses under the hood.
+4. It installs three hooks with Dobby: capture the destination `sockaddr`, rewrite IP/port to the proxy,
+   and force the "certificate is valid" result.
 
-Detalhes de implementação, incluindo as decisões que divergem da abordagem original e por quê, estão em
+Implementation details, including where and why this diverges from the original approach, are in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-## Compatibilidade
+## Compatibility
 
-| Item | Suporte |
+| Item | Support |
 |---|---|
-| Android | 10 (API 29) a 17 (API 37) |
-| Arquiteturas | `arm64-v8a`, `x86_64` |
+| Android | 10 (API 29) through 17 (API 37) |
+| Architectures | `arm64-v8a`, `x86_64` |
 | Root | Magisk, KernelSU, SukiSu Ultra, APatch |
-| Zygisk | Zygisk nativo do Magisk, Zygisk Next (**inclusive com o Zygisk Next Linker ativo**) ou NeoZygisk |
+| Zygisk | Magisk's built-in Zygisk, Zygisk Next (**including with Zygisk Next Linker enabled**) or NeoZygisk |
 
-Validado em hardware em dois ambientes deliberadamente distintos:
+Validated on hardware in two deliberately different environments:
 
 - **OnePlus 5** — Android 10, Kitsune Magisk v27.2 + NeoZygisk 2.3
-- **Pixel 8a** — Android 17, SukiSu Ultra + Zygisk Next 1.4.3, com o **Zygisk Next Linker** ligado
+- **Pixel 8a** — Android 17, SukiSu Ultra + Zygisk Next 1.4.3, with **Zygisk Next Linker** enabled
 
-> **Zygisk é obrigatório.** Root sozinho não basta: todo o mecanismo vive nos callbacks do Zygisk. No
-> Magisk, ative a opção "Zygisk" nas configurações. No KernelSU/SukiSu Ultra, instale o Zygisk Next ou o
-> NeoZygisk. O APatch já traz uma implementação compatível.
+> **Zygisk is required.** Root alone is not enough: the whole mechanism lives in the Zygisk callbacks. On
+> Magisk, turn on the "Zygisk" setting. On KernelSU/SukiSu Ultra, install Zygisk Next or NeoZygisk.
+> APatch ships a compatible implementation.
 >
-> A compatibilidade com o **Zygisk Next Linker** exigiu correções específicas — se você mantém um módulo
-> Zygisk e ele quebra com esse recurso, a seção 12 do relatório documenta as três armadilhas encontradas
-> (e uma pista falsa que custou tempo), de forma reaproveitável.
+> Compatibility with **Zygisk Next Linker** required specific fixes. If you maintain a Zygisk module that
+> breaks with that feature, the "Zygisk Next Linker compatibility" section of
+> [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) documents the three traps found (and one false lead that
+> cost real time), in reusable form.
 
-## Instalação
+## Installation
 
-1. **Instale o módulo**: baixe o `FlutterTap-<versão>.zip` e instale pelo app do seu gerenciador de root
-   (Magisk / KernelSU / SukiSu Ultra / APatch). Reinicie o aparelho.
-2. **Instale o app gerenciador** (`FlutterTap.apk`) e conceda root na primeira abertura.
-3. **Configure**: informe o IP e a porta do seu proxy (o IP da máquina rodando o Burp, na mesma rede
-   Wi-Fi) e marque os apps que quer interceptar.
-4. **Force a parada do app-alvo e abra de novo.** O hook só entra em processos novos — reabrir sem forçar
-   a parada não basta.
+Download both files from the [latest release](../../releases/latest).
 
-> **Root é obrigatório também para o app gerenciador**, não só para salvar: a configuração fica em
-> `/data/adb/`, então sem root ele não consegue nem ler o que já está gravado.
+1. **Install the module**: flash `FlutterTap-<version>.zip` from your root manager app
+   (Magisk / KernelSU / SukiSu Ultra / APatch). Reboot.
+2. **Install the manager app** (`FlutterTap-manager-<version>.apk`) and grant root on first launch.
+3. **Configure**: set the IP and port of your proxy (the IP of the machine running Burp, on the same
+   Wi-Fi network) and tick the apps you want to intercept.
+4. **Force-stop the target app and open it again.** The hook only enters new processes — reopening
+   without force-stopping is not enough.
 
-No Burp, use um listener em **modo invisível** (*invisible proxying*), já que o app envia requisições
-comuns, não requisições de proxy.
+> **Root is required for the manager app too**, not just to save: the configuration lives under
+> `/data/adb/`, so without root it cannot even read what is already stored.
 
-### Passo a passo com evidências
+In Burp, use a listener with **invisible proxying** enabled, since the app sends ordinary requests rather
+than proxy-directed ones.
 
-Capturas reais de um Pixel 8a com Android 17 e SukiSU Ultra, na ordem em que as etapas acontecem.
+### Step by step, with evidence
 
-**1. Ambiente e instalação do módulo**
+Real captures from a Pixel 8a running Android 17 with SukiSu Ultra, in the order the steps happen.
 
-<p align="center">
-  <img src="docs/screenshots/pixel8a-android17/1-device.png" alt="Android 17 no Pixel 8a, SukiSU Ultra em execução, log da instalação e módulo habilitado">
-</p>
-
-Android 17 no Pixel 8a, SukiSU Ultra em execução (modo LKM), o log da instalação terminando em
-*Module installed successfully* e, por fim, o FlutterTap habilitado na lista de módulos — já com o botão
-**Ação**, que abre o app gerenciador direto dali.
-
-**2. Concessão de root e configuração do proxy**
+**1. Environment and module installation**
 
 <p align="center">
-  <img src="docs/screenshots/pixel8a-android17/2-gerenciador-config.png" alt="Root negado, concessão manual no SukiSU Ultra e app configurado">
+  <img src="docs/screenshots/pixel8a-android17/1-device.png" alt="Android 17 on a Pixel 8a, SukiSu Ultra running, the install log, and the module enabled">
 </p>
 
-Na primeira abertura o app pode exibir **"Root access denied"**: gerenciadores da família KernelSU
-guardam a decisão por app e não reexibem o prompt. A solução está destacada na própria tela — abrir o
-SukiSU Ultra, ir em **Perfil do Aplicativo** e ligar o **SuperUsuário** manualmente. Feito isso, o app
-passa a reportar *Root access granted*, *Module installed* e *Enabled*, e o IP/porta reais do proxy podem
-ser salvos.
+Android 17 on a Pixel 8a, SukiSu Ultra running (LKM mode), the installer log ending in *Module installed
+successfully*, and finally FlutterTap enabled in the module list — already showing the **Action** button,
+which opens the manager app straight from there.
 
-**3. Preparar o Burp**
+**2. Granting root and configuring the proxy**
 
 <p align="center">
-  <img src="docs/screenshots/pixel8a-android17/3-invisible-proxy.png" width="620" alt="Listener do Burp com Invisible Proxying ativado">
+  <img src="docs/screenshots/pixel8a-android17/2-gerenciador-config.png" alt="Root denied, manual grant in SukiSu Ultra, and the app configured">
 </p>
 
-O listener precisa estar com **Support invisible proxying** marcado (aba *Request handling*). Sem isso o
-Burp descarta as conexões: o app envia requisições HTTP comuns, não requisições dirigidas a um proxy.
+On first launch the app may show **"Root access denied"**: KernelSU-family managers persist the decision
+per app and never re-show the prompt. The fix is highlighted on the screen itself — open SukiSu Ultra, go
+to **App Profile**, and enable **SuperUser** manually. After that the app reports *Root access granted*,
+*Module installed* and *Enabled*, and the real proxy IP/port can be saved.
 
-**4. Prova de ponta a ponta — HTTP simples**
+**3. Preparing Burp**
 
 <p align="center">
-  <img src="docs/screenshots/pixel8a-android17/4-bypass-app1.png" alt="VulnApp selecionado, chamada disparada e tráfego capturado no Burp">
+  <img src="docs/screenshots/pixel8a-android17/3-invisible-proxy.png" width="620" alt="Burp listener with invisible proxying enabled">
 </p>
 
-Com o **VulnApp** marcado como alvo, a chamada disparada no aparelho aparece no Burp chegando pela
-**porta 8083** — a porta do listener, o que comprova que o redirecionamento aconteceu. O
-`user-agent: Dart/3.12 (dart:io)` confirma que a requisição saiu do cliente HTTP do Flutter.
+The listener needs **Support invisible proxying** checked (*Request handling* tab). Without it Burp drops
+the connections: the app sends ordinary HTTP requests, not requests addressed to a proxy.
 
-**5. Prova de ponta a ponta — HTTPS descriptografado**
+**4. End to end — plain HTTP**
 
 <p align="center">
-  <img src="docs/screenshots/pixel8a-android17/5-bypass-app2.png" alt="Ostorlab Insecure App com tráfego HTTPS descriptografado no Burp">
+  <img src="docs/screenshots/pixel8a-android17/4-bypass-app1.png" alt="VulnApp targeted, request triggered, and traffic captured in Burp">
 </p>
 
-O mesmo com o **Ostorlab Insecure App**, agora sobre **HTTPS**: o Burp mostra `https://ostorlab.co` com
-resposta **HTTP/2 200** e o HTML em texto claro. Este é o resultado que o bypass de pinning entrega —
-e **nenhum certificado CA foi instalado no aparelho**.
+With **VulnApp** set as a target, the request triggered on the device shows up in Burp arriving on
+**port 8083** — the listener's port, which proves the redirect happened. The
+`user-agent: Dart/3.12 (dart:io)` confirms it came from Flutter's own HTTP client.
 
-### Configuração sem o app gerenciador
+**5. End to end — decrypted HTTPS**
 
-O app é apenas uma interface para um arquivo JSON. Para automatizar (provisionamento, CI, aparelho sem
-tela), escreva direto em `/data/adb/fluttertap/config.json`:
+<p align="center">
+  <img src="docs/screenshots/pixel8a-android17/5-bypass-app2.png" alt="Ostorlab Insecure App with HTTPS traffic decrypted in Burp">
+</p>
+
+The same with the **Ostorlab Insecure App**, now over **HTTPS**: Burp shows `https://ostorlab.co` with an
+**HTTP/2 200** response and the HTML in the clear. This is what the pinning bypass delivers — and **no CA
+certificate was installed on the device**.
+
+### Configuring without the manager app
+
+The app is just a front end for a single JSON file. To automate (provisioning, CI, a headless device),
+write `/data/adb/fluttertap/config.json` directly:
 
 ```json
 {
   "enabled": true,
   "proxy_ip": "192.168.1.10",
   "proxy_port": 8080,
-  "target_packages": ["com.exemplo.app"]
+  "target_packages": ["com.example.app"]
 }
 ```
 
-O arquivo é relido do disco a cada processo criado, então basta `am force-stop` no app-alvo e reabrir —
-sem reiniciar o aparelho. A correspondência é feita pelo nome do processo, e listar `com.exemplo.app`
-também captura subprocessos nomeados (`com.exemplo.app:remote`). A seção 11.3 do relatório detalha o
-esquema, as receitas de edição via `adb` e os modos de falha silenciosa.
+The file is re-read from disk for every process that starts, so `am force-stop` on the target app and
+reopening it is enough — no reboot required. Matching is done against the process name, and listing
+`com.example.app` also catches named subprocesses (`com.example.app:remote`).
 
-## Diagnóstico
+## Diagnostics
 
 ```sh
 adb logcat -s FlutterTap:V
 ```
 
-O esperado, para um app-alvo, é a sequência: `selected for hooking` → `libflutter.so loaded at ...` →
-`verify_cert_chain=0x... GetSockAddr=0x...` → `hooks: installed for ... -> proxy IP:PORTA`, e depois
-`hooks: overwrite sockaddr` / `hooks: verify_cert_chain bypass` conforme o app faz requisições.
+For a target app, expect: `selected for hooking` → `libflutter.so loaded at ...` →
+`verify_cert_chain=0x... GetSockAddr=0x...` → `hooks: installed for ... -> proxy IP:PORT`, then
+`hooks: overwrite sockaddr` / `hooks: verify_cert_chain bypass` as the app makes requests.
 
-Se **nada** aparecer, quase sempre é uma destas três: o nome do pacote não corresponde ao processo, o
-`config.json` está inválido (o módulo cai nos padrões e não intercepta nada), ou o app já estava rodando
-quando a configuração mudou.
+If **nothing** shows up, it is almost always one of three things: the package name doesn't match the
+process, `config.json` is invalid (the module falls back to defaults and intercepts nothing), or the app
+was already running when the configuration changed.
 
-## Compilando
+## Building
 
-Requer Android SDK/NDK e **JDK 17 ou 21** (o Gradle 8.11.1 não lê JDK 22+; aponte o `JAVA_HOME` para o JBR
-do Android Studio se o seu `java` padrão for mais novo).
+Requires the Android SDK/NDK and **JDK 17 or 21** (Gradle 8.11.1 cannot parse JDK 22+; point `JAVA_HOME`
+at Android Studio's bundled JBR if your default `java` is newer).
 
 ```sh
-git clone --recurse-submodules <repo>
-./scripts/build_module_zip.sh      # gera dist/FlutterTap-<versão>.zip
+git clone --recurse-submodules https://github.com/script-or-script/FlutterTap.git
+cd FlutterTap
+export ANDROID_HOME=/path/to/Android/Sdk
+./scripts/build_module_zip.sh          # produces dist/FlutterTap-<version>.zip
 ./gradlew :manager-app:assembleDebug
 ```
 
-Instruções completas em [`docs/BUILD.md`](docs/BUILD.md).
+> On Windows, clone into a **short path** (e.g. `C:\dev\FlutterTap`). Capstone nests deeply enough to
+> cross the 260-character limit, and the clone fails with *"Filename too long"* otherwise.
 
-## Documentação
+Full instructions, including release signing, are in [`docs/BUILD.md`](docs/BUILD.md).
 
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — como cada peça funciona e por que foi feita assim
-- [`docs/BUILD.md`](docs/BUILD.md) — compilação e empacotamento
-- [`docs/FlutterTap-Relatorio-Desenvolvimento.pdf`](docs/FlutterTap-Relatorio-Desenvolvimento.pdf) —
-  relatório completo de desenvolvimento, com a validação em dispositivo real e o guia de compatibilidade
-  com o Zygisk Next Linker
+## Documentation
 
-## Aviso
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — how each piece works and why it was done that way,
+  including Zygisk Next Linker compatibility
+- [`docs/BUILD.md`](docs/BUILD.md) — building, packaging and signing
 
-Uso destinado à **análise de tráfego autorizada** — pentest mobile, engenharia reversa e pesquisa de
-segurança em aplicativos que você tem permissão para testar. Interceptar tráfego de aplicativos de
-terceiros sem autorização é ilegal na maior parte das jurisdições.
+## Disclaimer
 
-## Licença
+Intended for **authorised traffic analysis** — mobile penetration testing, reverse engineering and
+security research on applications you have permission to test. Intercepting third-party application
+traffic without authorisation is illegal in most jurisdictions.
 
-MIT — veja [`LICENSE`](LICENSE). O módulo nativo linka estaticamente Dobby (Apache-2.0) e Capstone
-(BSD-3); os componentes de terceiros estão listados em [`THIRD_PARTY.md`](THIRD_PARTY.md), e os textos
-completos das licenças acompanham o `.zip` distribuído.
+## License
+
+MIT — see [`LICENSE`](LICENSE). The native module statically links Dobby (Apache-2.0) and Capstone
+(BSD-3); third-party components are listed in [`THIRD_PARTY.md`](THIRD_PARTY.md), and the full license
+texts ship inside the distributed `.zip`.
 
 ---
-Desenvolvido por Eduardo Lopes
+Built by Eduardo Lopes
