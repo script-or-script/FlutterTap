@@ -14,6 +14,18 @@
 - CMake `3.22.1` (bundled with the Android SDK)
 - Git (the two native dependencies are git submodules)
 
+### Two things a fresh clone hits immediately
+
+**Point Gradle at the SDK.** `local.properties` is gitignored (it holds a machine-specific
+path), so a clone has none and the build stops with *"SDK location not found"*. Either export
+`ANDROID_HOME=/path/to/Android/Sdk` or create `local.properties` with `sdk.dir=/path/to/Android/Sdk`.
+
+**On Windows, clone into a short path.** Capstone has deeply nested directories
+(`suite/synctools/tablegen/...`) and Windows' 260-character limit is easy to exceed: cloning into
+something like `C:\Users\you\Documents\projects\...` fails with *"Filename too long"* while the
+submodules are being fetched. Clone into e.g. `C:\dev\fluttertap`, or enable long paths with
+`git config --global core.longpaths true`.
+
 ## First-time setup
 
 ```bash
