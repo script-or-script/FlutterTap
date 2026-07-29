@@ -81,7 +81,7 @@ int fakeSocket(int domain, int type, int protocol) {
             auto *sin = reinterpret_cast<sockaddr_in *>(sa);
             sin->sin_port = htons(g_proxyPort);
             sin->sin_addr = g_proxyAddr;
-            ft_log_info("overwrite sockaddr -> %s:%u", g_proxyIp.c_str(), g_proxyPort);
+            ft_log_info("hooks: overwrite sockaddr -> %s:%u", g_proxyIp.c_str(), g_proxyPort);
         }
     }
     return g_origSocket(domain, type, protocol);
@@ -90,7 +90,7 @@ int fakeSocket(int domain, int type, int protocol) {
 int fakeVerifyCertChain(void *session, void *handshake, void *outAlert) {
     int ret = g_origVerifyCertChain(session, handshake, outAlert);
     if (ret == 0) {
-        ft_log_info("verify_cert_chain bypass");
+        ft_log_info("hooks: verify_cert_chain bypass");
         return 1;
     }
     return ret;
@@ -114,13 +114,13 @@ void *resolveLibcSocket() {
         sym = dlsym(libc, "socket");
         dlclose(libc);
         if (sym != nullptr) {
-            ft_log_info("resolved socket() via explicit libc handle");
+            ft_log_info("hooks: resolved socket() via explicit libc handle");
             return sym;
         }
     }
     // Fallback for the plain-Zygisk path, where the system linker does know us.
     sym = dlsym(RTLD_DEFAULT, "socket");
-    if (sym != nullptr) ft_log_info("resolved socket() via RTLD_DEFAULT");
+    if (sym != nullptr) ft_log_info("hooks: resolved socket() via RTLD_DEFAULT");
     return sym;
 }
 
@@ -138,18 +138,18 @@ bool install(const MappedModule &flutter_mod, const ResolvedAddrs &addrs, const 
     // of silently producing connections that keep going to the real host.
     const bool proxyAddrOk = inet_pton(AF_INET, g_proxyIp.c_str(), &g_proxyAddr) == 1;
     if (!proxyAddrOk) {
-        ft_log_error("invalid proxy IP '%s' -- socket redirect disabled", g_proxyIp.c_str());
+        ft_log_error("hooks: invalid proxy IP '%s' -- socket redirect disabled", g_proxyIp.c_str());
         ok = false;
     }
 
     if (DobbyHook(reinterpret_cast<void *>(addrs.verify_cert_chain), reinterpret_cast<void *>(fakeVerifyCertChain),
                   reinterpret_cast<void **>(&g_origVerifyCertChain)) != 0) {
-        ft_log_error("DobbyHook(verify_cert_chain) failed");
+        ft_log_error("hooks: DobbyHook(verify_cert_chain) failed");
         ok = false;
     }
 
     if (DobbyInstrument(reinterpret_cast<void *>(addrs.get_sock_addr), getSockAddrInstrumentCallback) != 0) {
-        ft_log_error("DobbyInstrument(GetSockAddr) failed");
+        ft_log_error("hooks: DobbyInstrument(GetSockAddr) failed");
         ok = false;
     }
 
@@ -158,17 +158,17 @@ bool install(const MappedModule &flutter_mod, const ResolvedAddrs &addrs, const 
     if (proxyAddrOk) {
         void *socketAddr = resolveLibcSocket();
         if (!socketAddr) {
-            ft_log_error("could not resolve libc socket()");
+            ft_log_error("hooks: could not resolve libc socket()");
             ok = false;
         } else if (DobbyHook(socketAddr, reinterpret_cast<void *>(fakeSocket),
                              reinterpret_cast<void **>(&g_origSocket)) != 0) {
-            ft_log_error("DobbyHook(socket) failed");
+            ft_log_error("hooks: DobbyHook(socket) failed");
             ok = false;
         }
     }
 
     if (ok) {
-        ft_log_info("hooks installed for %s -> proxy %s:%u", flutter_mod.path.c_str(), g_proxyIp.c_str(),
+        ft_log_info("hooks: installed for %s -> proxy %s:%u", flutter_mod.path.c_str(), g_proxyIp.c_str(),
                     g_proxyPort);
     }
     return ok;

@@ -121,7 +121,7 @@ sobre socket Unix.
       exibição, já que os três implementam a mesma API Zygisk.</li>
   <li>Grava a configuração via shell root (<code>libsu</code>), codificada em base64 para não precisar
       escapar caracteres especiais.</li>
-  <li>3 idiomas: Português (Brasil), Inglês e Chinês, trocáveis direto no app.</li>
+  <li>7 idiomas: Português (Brasil), Inglês, Espanhol, Francês, Árabe, Hindi e Chinês, trocáveis direto no app.</li>
   <li>Tema claro/escuro sempre acompanhando o tema do sistema (Compose + <code>values-night/</code>),
       corrigindo o problema relatado de telas com fundo branco mesmo com o celular em modo escuro.</li>
 </ul>
@@ -144,11 +144,20 @@ que poderiam parecer "erros" à primeira vista — foram mantidas intencionalmen
       1 byte por vez tentando decodificar uma instrução válida a cada posição (em vez de avançar pelo
       tamanho real da instrução anterior). Isso foi copiado exatamente assim, pois é o que foi validado
       empiricamente contra builds reais do BoringSSL/Flutter.</li>
-  <li><strong>Caso especial do app da Alibaba.</strong> O script trata separadamente o padrão de bytes do
-      app <code>com.alibaba.intl.android.apps.poseidon</code>, que difere dos demais — mantido no módulo.</li>
+  <li><strong>Caso especial do app da Alibaba — deliberadamente NÃO portado.</strong> O script trata
+      separadamente o padrão de bytes do app <code>com.alibaba.intl.android.apps.poseidon</code>, que difere
+      dos demais. Esse caso especial existia apenas porque os padrões de bytes originais embutiam registradores
+      específicos; a varredura por mnemônicos adotada aqui (seção 6.5) casa nos dois casos, tornando a exceção
+      desnecessária.</li>
 </ul>
 
 <h2>5. Melhorias deliberadas (sem mudar o comportamento observável)</h2>
+<div class="box">
+Três dos pontos abaixo (captura por thread, posicionamento do guard de SIGSEGV e resolução do
+<code>socket()</code>) tiveram de ser reimplementados para funcionar sob o Zygisk Next Linker — o que está
+detalhado na <strong>seção 12</strong>. O comportamento final é o descrito aqui; a seção 12 explica por que a
+primeira implementação não servia.
+</div>
 <p>
 O script original foi feito para uma sessão curta e supervisionada por um humano. O módulo roda sozinho,
 durante toda a vida do app, então alguns pontos foram reforçados sem alterar o que acontece na rede:
@@ -193,7 +202,7 @@ independente: o workflow de CI do próprio projeto Dobby define um job que dever
 pré-compilado para Android, mas esse artefato simplesmente não aparece nos releases — sinal de que o job
 falha silenciosamente há tempos.
 <br><br>
-A solução foi fixar o submódulo Git do Dobby em um commit anterior (<code>e9fe7fb</code>, de abril de
+A solução foi fixar o submódulo Git do Dobby em <code>025e9fc</code> — um patch local sobre o commit upstream <code>e9fe7fb</code> (de abril de
 2023), o último antes da reestruturação que introduziu essa inconsistência, e aplicar dois pequenos
 ajustes locais por cima:
 <ol>
@@ -300,7 +309,7 @@ Modulo SukiSu/
 │       ├── addr_resolver.*      Resolução de endereços via Capstone
 │       ├── hooks.*              Instalação dos hooks via Dobby
 │       └── third_party/         Capstone e Dobby (submódulos git)
-│   └── template/                module.prop, customize.sh, uninstall.sh
+│   └── template/                module.prop, customize.sh, uninstall.sh, action.sh
 ├── manager-app/                 App gerenciador (Kotlin + Jetpack Compose)
 ├── scripts/build_module_zip.sh  Empacota o .zip flashável final
 └── docs/                        Esta documentação
@@ -311,8 +320,10 @@ Modulo SukiSu/
 <tr><th>Item</th><th>Suporte</th></tr>
 <tr><td>Versões do Android</td><td>Android 10 (API 29) até Android 17 (API 37, mais recente disponível no momento)</td></tr>
 <tr><td>Arquiteturas</td><td>arm64-v8a (aparelhos reais) e x86_64 (emuladores)</td></tr>
-<tr><td>Root</td><td>Magisk (Zygisk nativo), KernelSU (com Zygisk/Zygisk Next), APatch</td></tr>
-<tr><td>Idiomas do app</td><td>Português (Brasil), Inglês, Chinês</td></tr>
+<tr><td>Root</td><td>Magisk (Zygisk nativo), KernelSU / SukiSu Ultra (com Zygisk Next ou NeoZygisk), APatch</td></tr>
+<tr><td>Zygisk Next Linker</td><td>Compatível (ver seção 12). Validado com o recurso ativo no Zygisk Next 1.4.3.</td></tr>
+<tr><td>Ambientes validados em hardware</td><td>OnePlus 5 / Android 10 / Kitsune Magisk + NeoZygisk 2.3 &nbsp;•&nbsp; Pixel 8a / Android 17 / SukiSu Ultra + Zygisk Next 1.4.3 (com ZN Linker)</td></tr>
+<tr><td>Idiomas do app</td><td>Português (Brasil), Inglês, Espanhol, Francês, Árabe, Hindi, Chinês</td></tr>
 </table>
 
 <h2>9. Aviso legal e ético</h2>
@@ -326,10 +337,19 @@ interceptar é sempre manual, feita pelo usuário através do app gerenciador.
 
 <h2 class="page-break">10. Validação em dispositivo real</h2>
 <p>
-O módulo foi testado em um aparelho físico: um <strong>OnePlus 5, Android 10, arquitetura arm64-v8a</strong>,
-com root via Magisk (fork "Kitsune Magisk" v27.2) e Zygisk fornecido pelo módulo <strong>NeoZygisk</strong>
-(já que esse fork não usa o Zygisk nativo). O Burp Suite já estava rodando na máquina do desenvolvedor,
-escutando em <code>192.168.15.13:8083</code>, na mesma rede Wi-Fi do aparelho.
+O módulo foi validado em <strong>dois aparelhos físicos</strong>, deliberadamente diferentes entre si para
+cobrir extremos de versão de Android e de implementação de root:
+</p>
+<ul>
+  <li><strong>OnePlus 5, Android 10, arm64-v8a</strong> — root via Magisk (fork "Kitsune Magisk" v27.2) com
+      Zygisk fornecido pelo módulo <strong>NeoZygisk</strong> (esse fork não usa o Zygisk nativo).</li>
+  <li><strong>Pixel 8a, Android 17, arm64-v8a</strong> — root via <strong>SukiSu Ultra</strong> (fork do
+      KernelSU) com <strong>Zygisk Next 1.4.3</strong>, incluindo o recurso <strong>Zygisk Next Linker</strong>
+      ativo (ver seção 12).</li>
+</ul>
+<p>
+O Burp Suite rodava na máquina do desenvolvedor, escutando em <code>192.168.15.13:8083</code>, na mesma rede
+Wi-Fi dos aparelhos.
 </p>
 
 <h3>10.1 Apps de demonstração escolhidos</h3>
@@ -581,7 +601,7 @@ Para confirmar que a configuração foi aceita, acompanhe o log do módulo:
 <pre>adb logcat -s FlutterTap:V</pre>
 <p>
 O esperado é <code>selected for hooking</code> seguido de
-<code>hooks installed for ... -&gt; proxy IP:PORTA</code>. Se <strong>nada</strong> aparecer, a causa é uma
+<code>hooks: installed for ... -&gt; proxy IP:PORTA</code>. Se <strong>nada</strong> aparecer, a causa é uma
 destas três: o nome não corresponde ao processo, o JSON é inválido, ou o app já estava em execução quando a
 configuração mudou.
 </p>
@@ -654,6 +674,11 @@ void postAppSpecialize(const AppSpecializeArgs *args) override {
     if (!shouldHook_) return;            // não-alvos já se descarregaram
     install_crash_guard();               // agora é seguro
 }</pre>
+<p>
+No FlutterTap a instalação fica um passo adiante ainda: dentro de <code>runHookPipeline()</code>, já na thread
+de monitoramento que espera o <code>libflutter.so</code> carregar. O princípio é o mesmo — só se instala em
+processo-alvo confirmado, no qual o módulo permanece carregado.
+</p>
 <div class="box">
 <strong>Regra geral:</strong> nada que altere estado global do processo — handlers de sinal, hooks inline em
 libc, <code>atexit</code>, threads — deve ser feito no <code>onLoad()</code>. Sob o ZN Linker isso é
@@ -795,17 +820,30 @@ você quer que seja desativado automaticamente se algo der errado.
 
 <h2>13. Próximos passos</h2>
 <ol>
-  <li class="ok" style="list-style:none; margin-left:-20px; padding:6px 10px;">✔ Testar o módulo em um dispositivo real contra um app Flutter conhecido e validar a captura de
-      tráfego no Burp Suite — <strong>concluído</strong> (seção 10), incluindo confirmação independente
-      contra um app real de produção (seção 10.4).</li>
-  <li class="ok" style="list-style:none; margin-left:-20px; padding:6px 10px;">✔ Ajustar a resolução de endereços para builds mais novos do engine Flutter/BoringSSL —
-      <strong>três correções aplicadas e validadas</strong> (seção 6.5); um caso específico
-      (<code>GetSockAddr</code> em um build particular, seção 6.6) ficou documentado como limitação
-      conhecida em vez de arriscar mudar a lógica compartilhada sem necessidade.</li>
-  <li>Tirar capturas de tela reais do app gerenciador e dos dois apps de demonstração (Ostorlab Insecure App
-      e VulnApp, já compilados e prontos no aparelho) para ilustrar o README/tutorial — pendente, a fazer na
-      próxima sessão.</li>
-  <li>Publicar o projeto no GitHub: README completo, tutorial de instalação, capturas de tela, licença.</li>
+  <li class="ok" style="list-style:none; margin-left:-20px; padding:6px 10px;">✔ Testar o módulo em dispositivo
+      real contra apps Flutter e validar a captura no Burp — <strong>concluído</strong> em dois aparelhos
+      (seção 10), incluindo confirmação independente contra um app real de produção (seção 10.4).</li>
+  <li class="ok" style="list-style:none; margin-left:-20px; padding:6px 10px;">✔ Ajustar a resolução de
+      endereços para builds mais novos do engine Flutter/BoringSSL — <strong>três correções aplicadas e
+      validadas</strong> (seção 6.5); um caso específico (<code>GetSockAddr</code> em um build particular,
+      seção 6.6) ficou documentado como limitação conhecida.</li>
+  <li class="ok" style="list-style:none; margin-left:-20px; padding:6px 10px;">✔ Compatibilidade com o
+      <strong>Zygisk Next Linker</strong> — <strong>concluída e validada com o recurso ativo</strong>
+      (seção 12), com três bugs reais corrigidos no próprio módulo.</li>
+  <li class="ok" style="list-style:none; margin-left:-20px; padding:6px 10px;">✔ Capturas de tela do app
+      gerenciador e dos dois apps de demonstração — <strong>feitas e versionadas</strong> em
+      <code>docs/screenshots/</code>.</li>
+  <li class="ok" style="list-style:none; margin-left:-20px; padding:6px 10px;">✔ Licenciamento —
+      <strong>MIT</strong> (<code>LICENSE</code>), com <code>THIRD_PARTY.md</code> e os textos das licenças de
+      Dobby (Apache-2.0) e Capstone (BSD-3) embarcados no próprio <code>.zip</code>, como exigem essas
+      licenças para redistribuição binária.</li>
+  <li><strong>Resolver o pin do submódulo Dobby</strong> — hoje ele aponta para um commit que existe apenas na
+      máquina de desenvolvimento, então <code>git clone --recurse-submodules</code> não funciona para
+      terceiros. O patch está preservado em <code>patches/dobby-android-build.patch</code>; a solução
+      pretendida é publicar um fork do Dobby com esse commit e reapontar o <code>.gitmodules</code>.
+      <em>Bloqueia a publicação.</em></li>
+  <li>Escrever o README completo do GitHub (tutorial de instalação passo a passo com as capturas já
+      disponíveis).</li>
   <li>Preparar e enviar o módulo para a página oficial de módulos do Magisk
       (<a href="https://github.com/Magisk-Modules-Repo">Magisk-Modules-Repo</a>), seguindo os requisitos de
       submissão desse repositório.</li>

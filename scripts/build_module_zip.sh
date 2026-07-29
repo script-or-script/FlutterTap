@@ -53,6 +53,15 @@ find_ndk_tool() {
 
 STRIP_BIN="$(find_ndk_tool llvm-strip)"
 READELF_BIN="$(find_ndk_tool llvm-readelf)"
+
+# Under Git Bash/MSYS the NDK tools are native Windows binaries and cannot read
+# MSYS-style paths (/c/...). MSYS normally rewrites arguments automatically, but
+# MSYS2_ARG_CONV_EXCL in the caller's environment silently disables that -- which
+# made llvm-strip fail with "No such file or directory" on a perfectly valid
+# path. Convert explicitly so the script works either way.
+host_path() {
+  if command -v cygpath >/dev/null 2>&1; then cygpath -w "$1"; else printf '%s' "$1"; fi
+}
 if [ -z "$READELF_BIN" ]; then
   echo "ERROR: llvm-readelf not found in any NDK; cannot verify the built .so." >&2
   echo "       Set ANDROID_NDK_HOME, or see docs/BUILD.md." >&2
@@ -68,7 +77,7 @@ for abi in arm64-v8a x86_64; do
   dest="$STAGE_DIR/zygisk/${abi}.so"
   cp "$so_path" "$dest"
   if [ -n "$STRIP_BIN" ]; then
-    "$STRIP_BIN" --strip-unneeded "$dest"
+    "$STRIP_BIN" --strip-unneeded "$(host_path "$dest")"
   fi
   echo "  - ${abi}.so <- $so_path ($(du -h "$dest" | cut -f1))"
 
@@ -76,7 +85,7 @@ for abi in arm64-v8a x86_64; do
   # the Zygisk Next Linker's minimal ELF loader is least likely to handle
   # identically to the system linker. Use pthread TSD instead (see the note in
   # mem_scan.cpp).
-  if "$READELF_BIN" -r "$dest" 2>/dev/null | grep -qE "TLSDESC|DTPMOD|TPOFF|TPREL"; then
+  if "$READELF_BIN" -r "$(host_path "$dest")" 2>/dev/null | grep -qE "TLSDESC|DTPMOD|TPOFF|TPREL"; then
     echo "ERROR: ${abi}.so contains TLS relocations -- use pthread TSD, not thread_local" >&2
     exit 1
   fi

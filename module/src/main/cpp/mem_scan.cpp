@@ -60,19 +60,27 @@ GuardState *guardState() {
 struct sigaction g_oldSegv {};
 struct sigaction g_oldBus {};
 
+// Hands the signal back to whoever owned it before us. Every path must end
+// either in a handler that resolves the fault or in the process dying:
+// returning from a SIGSEGV handler without fixing the fault re-executes the
+// faulting instruction, so a silent return here would spin the app at 100% CPU
+// forever instead of crashing.
 void invokeOld(const struct sigaction &old, int sig, siginfo_t *info, void *ctx) {
-    if (old.sa_flags & SA_SIGINFO) {
-        if (old.sa_sigaction) old.sa_sigaction(sig, info, ctx);
+    if ((old.sa_flags & SA_SIGINFO) && old.sa_sigaction != nullptr) {
+        old.sa_sigaction(sig, info, ctx);
         return;
     }
-    if (old.sa_handler == SIG_DFL) {
-        signal(sig, SIG_DFL);
-        raise(sig);
-        return;
-    }
-    if (old.sa_handler != SIG_IGN && old.sa_handler != nullptr) {
+    if (!(old.sa_flags & SA_SIGINFO) && old.sa_handler != SIG_DFL && old.sa_handler != SIG_IGN &&
+        old.sa_handler != nullptr) {
         old.sa_handler(sig);
+        return;
     }
+    // SIG_DFL, SIG_IGN, or a malformed disposition. Restore whatever was there
+    // and return so the instruction re-faults naturally: unlike raise(), that
+    // keeps the tombstone's fault address and registers pointing at the real
+    // faulting instruction instead of at this handler frame -- otherwise an
+    // unrelated app crash looks like it came from FlutterTap.
+    sigaction(sig, &old, nullptr);
 }
 
 void segvHandler(int sig, siginfo_t *info, void *ctx) {
@@ -126,7 +134,12 @@ void mem_scan_install_crash_guard() {
 
     struct sigaction sa {};
     sa.sa_sigaction = segvHandler;
-    sa.sa_flags = SA_SIGINFO;
+    // SA_ONSTACK matches what ART installs its own SIGSEGV handler with: it
+    // uses guard-page faults for implicit stack-overflow checks, so on a real
+    // stack overflow the handler must run on the alternate stack, not on the
+    // exhausted one. Harmless where no sigaltstack exists -- the kernel just
+    // ignores the flag.
+    sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
     sigemptyset(&sa.sa_mask);
     sigaction(SIGSEGV, &sa, &g_oldSegv);
     sigaction(SIGBUS, &sa, &g_oldBus);

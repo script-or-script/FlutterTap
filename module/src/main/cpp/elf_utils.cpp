@@ -9,14 +9,18 @@
 #include <cstring>
 
 #include "log.h"
+#include "mem_scan.h"
 
 namespace {
 
+// Goes through safe_read rather than a bare memcpy: `addr` is derived from
+// header fields of a library we did not write (e_phoff/e_phnum), so a corrupt
+// or unexpected ELF can point it outside the mapping. The module's SIGSEGV
+// guard only diverts faults while safe_read has armed it, so a plain memcpy
+// here would take the host app down instead of failing cleanly.
 template <typename T>
-T readMem(uintptr_t addr) {
-    T value;
-    memcpy(&value, reinterpret_cast<void *>(addr), sizeof(T));
-    return value;
+bool readMem(uintptr_t addr, T &out) {
+    return safe_read(&out, reinterpret_cast<void *>(addr), sizeof(T));
 }
 
 // Same defensive "known program header types" whitelist the original script
@@ -81,7 +85,11 @@ bool find_module_by_suffix(const char *name_suffix, MappedModule &out) {
 }
 
 bool parse_elf_segments(const MappedModule &mod, ElfSegments &out) {
-    Elf64_Ehdr ehdr = readMem<Elf64_Ehdr>(mod.base);
+    Elf64_Ehdr ehdr{};
+    if (!readMem(mod.base, ehdr)) {
+        ft_log_warn("elf: cannot read ELF header of %s", mod.path.c_str());
+        return false;
+    }
     if (memcmp(ehdr.e_ident, ELFMAG, SELFMAG) != 0) {
         ft_log_warn("elf: bad magic for %s", mod.path.c_str());
         return false;
@@ -127,7 +135,11 @@ bool parse_elf_segments(const MappedModule &mod, ElfSegments &out) {
     bool foundTextSegment = false;
     for (uint16_t i = 0; i < phnum; i++) {
         uintptr_t phdrAddr = mod.base + phoff + static_cast<uint64_t>(i) * phentsize;
-        Elf64_Phdr phdr = readMem<Elf64_Phdr>(phdrAddr);
+        Elf64_Phdr phdr{};
+        if (!readMem(phdrAddr, phdr)) {
+            ft_log_warn("elf: program header %u of %s is unreadable, stopping walk", i, mod.path.c_str());
+            break;
+        }
 
         if (phdr.p_type == 0 && fd >= 0) {
             // Could be a relocation-in-progress artifact; confirm against the file.
