@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Referência de comandos ADB e Android</title>
+<style>
+
+  @page { margin: 2.2cm 1.8cm; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #1a1a1a; }
+  h1 { font-size: 22pt; color: #0D47A1; border-bottom: 3px solid #0D47A1; padding-bottom: 8px; }
+  h2 { font-size: 15pt; color: #0D47A1; margin-top: 30px; border-bottom: 1px solid #ccc; padding-bottom: 4px;
+       page-break-after: avoid; }
+  h3 { font-size: 12.5pt; color: #333; margin-top: 20px; page-break-after: avoid; }
+  .cover { text-align: center; padding-top: 150px; page-break-after: always; }
+  .cover h1 { border: none; font-size: 28pt; }
+  .cover .subtitle { font-size: 13pt; color: #555; margin-top: 12px; }
+  .cover .meta { margin-top: 70px; font-size: 11pt; color: #777; }
+  code, pre { font-family: Consolas, monospace; font-size: 9.5pt; }
+  pre { background: #f0f0f0; padding: 10px; border-radius: 4px; border-left: 3px solid #0D47A1;
+        white-space: pre-wrap; page-break-inside: avoid; }
+  .warn { background: #fff4e5; border-left: 4px solid #e07b00; padding: 10px 14px; margin: 12px 0;
+          page-break-inside: avoid; }
+  .signature { margin-top: 40px; font-style: italic; color: #444; }
+
+</style>
+</head>
+<body>
+<div class="cover">
+  <h1>Referência de comandos ADB e Android</h1>
+  <div class="subtitle">Compilado durante o desenvolvimento e depuração do FlutterTap</div>
+  <div class="meta">Eduardo Lopes<br>29 de julho de 2026</div>
+</div>
+<p>Compilado a partir do desenvolvimento e depuração do módulo FlutterTap (Zygisk). Todo comando aqui foi realmente executado e verificado em aparelho físico — OnePlus 5 (Android 10, Magisk) e Pixel 8a (Android 17, SukiSu Ultra).</p>
+<h2>1. Conexão e identificação do aparelho</h2>
+<pre>adb devices -l</pre>
+<p>Lista os aparelhos conectados com produto, modelo e transport_id. Use sempre antes de qualquer outra coisa: se houver mais de um aparelho plugado, todo comando seguinte precisa de -s.</p>
+<pre>adb -s 3C091JEKB06435 shell ...</pre>
+<p>Direciona o comando para um aparelho específico pelo número de série (a primeira coluna de adb devices). Com dois aparelhos conectados, sem isso o adb recusa o comando.</p>
+<pre>adb get-state</pre>
+<p>Retorna &#x27;device&#x27; quando está conectado e pronto. Útil em laço de espera após reiniciar.</p>
+<pre>adb shell getprop ro.build.version.release</pre>
+<p>Versão do Android. Outras propriedades úteis: ro.product.model, ro.build.version.sdk (nível de API), ro.product.cpu.abi (arquitetura).</p>
+<div class="warn"><strong>Atenção:</strong> Dica de automação: depois de &#x27;adb reboot&#x27;, o adb demora a voltar e pode retornar erros como &#x27;device offline&#x27; ou &#x27;no devices found&#x27;. Faça um laço checando &#x27;adb get-state&#x27; e só então &#x27;getprop sys.boot_completed&#x27;.</div>
+<h2>2. Root e a armadilha do redirecionamento</h2>
+<pre>adb shell su -c &quot;id&quot;</pre>
+<p>Verifica se o root funciona. A saída mostra também o contexto SELinux: &#x27;u:r:ksu:s0&#x27; indica KernelSU/SukiSu, &#x27;u:r:magisk:s0&#x27; indica Magisk. Se retornar vazio ou negado, o gerenciador de root não concedeu permissão para o shell do adb.</p>
+<pre>adb shell su -c &quot;cat &gt; /data/adb/arquivo&quot;     # ERRADO</pre>
+<p>Isto falha com &#x27;Permission denied&#x27; mesmo com root funcionando. O motivo: o redirecionamento &#x27;&gt;&#x27; é executado pelo shell EXTERNO (sem root), não pelo su. O su recebe apenas &#x27;cat&#x27;.</p>
+<pre>adb shell &quot;su -c &#x27;echo conteudo | tee /data/adb/arquivo&#x27;&quot;</pre>
+<p>Forma correta com tee: as aspas simples internas fazem o su receber o comando completo. O tee escreve como root.</p>
+<pre>adb push arq.json /data/local/tmp/arq.json
+adb shell su -c &quot;cp /data/local/tmp/arq.json /data/adb/destino.json&quot;</pre>
+<p>Alternativa mais robusta para arquivos maiores ou com formatação: empurra para /data/local/tmp (gravável pelo shell) e copia como root. O cp não depende de redirecionamento.</p>
+<h2>3. Gerenciamento de módulos</h2>
+<pre>adb shell su -c &quot;ksud module list&quot;</pre>
+<p>KernelSU / SukiSu Ultra: lista os módulos em JSON, com id, enabled, versão e description. O campo description costuma trazer status em tempo real (ex.: o Zygisk Next informa se o zygote foi injetado).</p>
+<pre>adb shell su -c &quot;ksud module install /data/local/tmp/modulo.zip&quot;
+adb shell su -c &quot;ksud module enable &lt;id&gt;&quot;
+adb shell su -c &quot;ksud module disable &lt;id&gt;&quot;</pre>
+<p>Instalar, habilitar e desabilitar módulos. Desabilitar tem efeito imediato no estado, mas só passa a valer de fato após reiniciar.</p>
+<pre>adb shell su -c &quot;magisk -v&quot;
+adb shell su -c &quot;magisk --install-module /data/local/tmp/modulo.zip&quot;</pre>
+<p>Equivalentes no Magisk. O &#x27;magisk -v&#x27; também revela forks (ex.: &#x27;v27.2-kitsune&#x27;).</p>
+<div class="warn"><strong>Atenção:</strong> A instalação NÃO substitui os arquivos imediatamente: ela grava em /data/adb/modules_update/&lt;id&gt;/ e só move para /data/adb/modules/&lt;id&gt;/ no próximo boot. Se o .so não aparecer no diretório ativo, não conclua que falhou — confira o modules_update.</div>
+<pre>adb shell su -c &quot;ls /data/adb/modules/&quot;
+adb shell su -c &quot;ls /data/adb/modules/&lt;id&gt;/disable&quot;</pre>
+<p>Lista módulos instalados. A presença de um arquivo &#x27;disable&#x27; dentro da pasta indica que aquele módulo está desativado — é assim que protetores de bootloop desligam módulos suspeitos.</p>
+<h2>4. Verificação de integridade (não confie, verifique)</h2>
+<pre>adb shell su -c &quot;sha256sum /data/adb/modules/&lt;id&gt;/zygisk/arm64-v8a.so&quot;
+sha256sum dist/stage/zygisk/arm64-v8a.so</pre>
+<p>Compare o checksum do que está no aparelho com o do build local. Esta é a checagem mais valiosa da lista: numa sessão real, um build abortou silenciosamente e o comando de instalação enviou o pacote ANTERIOR — o teste &#x27;passou&#x27; validando código velho. Só o checksum revelou.</p>
+<h2>5. Logs e diagnóstico</h2>
+<pre>adb logcat -c</pre>
+<p>Limpa o buffer. Faça isto imediatamente antes da ação que quer observar, para não misturar com histórico.</p>
+<pre>adb shell su -c &quot;logcat -d -s FlutterTap:V&quot;</pre>
+<p>Despeja o buffer filtrando por uma tag específica em nível verbose. O -d despeja e sai (sem -d o comando fica preso seguindo o log). Rodar via su é necessário quando o processo alvo é de outro usuário.</p>
+<pre>adb shell su -c &quot;logcat -d&quot; | grep -iE &quot;fatal|crash|abort|died&quot;</pre>
+<p>Varredura ampla por sinais de crash quando você não sabe a tag. Procure também por &#x27;signal 11 (SIGSEGV)&#x27; e &#x27;Process ... has died&#x27;.</p>
+<pre>adb shell su -c &quot;dmesg&quot; | head -3</pre>
+<p>Buffer do kernel. Cuidado: ele dá a volta rápido (1024 KB em poucos minutos de uptime). Se a primeira linha tiver timestamp muito maior que zero, os logs de boot já foram sobrescritos e não há como recuperá-los — use tombstones.</p>
+<pre>adb shell su -c &quot;ls -lt /data/tombstones/ | head&quot;</pre>
+<p>Relatórios nativos de crash, mais recentes primeiro. Cada tombstone traz sinal, mensagem de abort, backtrace e — muito útil — o campo &#x27;Process uptime&#x27;, que diz QUANDO o processo morreu e ajuda a separar &#x27;falhou ao carregar&#x27; de &#x27;morreu em uso&#x27;.</p>
+<h2>6. Processos e estado do sistema</h2>
+<pre>adb shell su -c &quot;ps -A&quot; | grep -c &quot;^u0_a&quot;</pre>
+<p>Conta processos de aplicativo de usuário. Sinal de saúde extremamente útil: num sistema saudável são dezenas (120+ num Pixel). Se der 0 ou muito baixo, o zygote não está conseguindo criar processos — indício de crash loop.</p>
+<pre>adb shell su -c &quot;pidof com.android.systemui&quot;</pre>
+<p>Verifica se a interface do sistema está viva. Se o SystemUI estiver morto, a tela fica preta mesmo com o aparelho ligado e respondendo ao adb.</p>
+<pre>adb shell su -c &quot;cat /proc/uptime&quot;
+adb shell su -c &quot;cat /proc/&lt;pid&gt;/stat&quot;</pre>
+<p>Tempo desde o boot e estatísticas do processo. No stat, o campo 22 é o starttime em ticks de clock desde o boot — divida por &#x27;getconf CLK_TCK&#x27; (normalmente 100) para saber há quanto tempo o processo existe. Serve para provar que um processo não reiniciou.</p>
+<pre>adb shell su -c &quot;am force-stop &lt;pacote&gt;&quot;</pre>
+<p>Encerra o app completamente. Obrigatório ao testar hooks: um módulo Zygisk só atua em processos NOVOS, então reabrir sem forçar a parada não aplica a configuração nova.</p>
+<pre>adb shell pm list packages | grep -i &lt;parte-do-nome&gt;</pre>
+<p>Descobre o nome exato do pacote. Sempre consulte em vez de supor — nomes reais surpreendem (ex.: &#x27;co.ostorlab.ostorlab_insecure_flutter_app.host&#x27;, com sufixo .host).</p>
+<pre>adb shell monkey -p &lt;pacote&gt; -c android.intent.category.LAUNCHER 1</pre>
+<p>Abre o app pela activity de launcher sem precisar saber o nome da activity. Mais prático que &#x27;am start -n pacote/.MainActivity&#x27; quando você não conhece a estrutura interna.</p>
+<h2>7. Automação de interface</h2>
+<pre>adb shell uiautomator dump /sdcard/ui.xml
+adb pull /sdcard/ui.xml .</pre>
+<p>Despeja a árvore de acessibilidade com as coordenadas REAIS de cada elemento, no atributo bounds=&quot;[x1,y1][x2,y2]&quot;. Este é o método confiável para saber onde tocar.</p>
+<div class="warn"><strong>Atenção:</strong> Lição aprendida na prática: NUNCA calcule coordenadas a partir de um screenshot exibido em escala. Uma imagem de 1080x2400 costuma ser exibida a 900x2000 — usar as coordenadas da exibição erra o alvo por 20%. Sempre use o bounds do uiautomator, ou multiplique pelo fator de escala corretamente. Se um toque não fizer o esperado, tire novo dump em vez de repetir o palpite.</div>
+<pre>adb shell input tap 540 1318
+adb shell input text &quot;admin&quot;
+adb shell input swipe 540 1900 540 700 200</pre>
+<p>Toque, digitação e arraste (o último número é a duração em ms). O input text não aceita espaços diretamente — use %s ou aspas.</p>
+<pre>adb shell input keyevent 61    # TAB
+adb shell input keyevent 66    # ENTER
+adb shell input keyevent 67    # DEL (backspace)
+adb shell input keyevent 111   # ESC
+adb shell input keyevent 123   # MOVE_END
+adb shell input keyevent 224   # WAKEUP (acorda a tela)</pre>
+<p>Códigos de tecla úteis. O TAB é a forma correta de passar de um campo de formulário para o próximo: tocar no campo seguinte falha quando o teclado virtual já está cobrindo a posição dele.</p>
+<div class="warn"><strong>Atenção:</strong> Outra armadilha real: para limpar um campo, tocar nele coloca o cursor onde você tocou, e os backspaces só apagam o que está ANTES do cursor. Envie keyevent 123 (MOVE_END) primeiro e depois os backspaces.</div>
+<pre>adb shell screencap -p /sdcard/s.png
+adb pull /sdcard/s.png .</pre>
+<p>Captura de tela. Combine com o uiautomator: o dump diz onde as coisas estão, o screenshot mostra o que elas são.</p>
+<pre>adb shell wm size
+adb shell wm density
+adb shell wm density 340
+adb shell wm density reset</pre>
+<p>Resolução física e densidade (DPI). Alterar a densidade muda o layout dos apps e é reversível com &#x27;reset&#x27; — útil quando um elemento está inacessível.</p>
+<pre>adb shell cmd overlay list android | grep navbar</pre>
+<p>Revela o modo de navegação: &#x27;threebutton&#x27; (barra com três botões) ou &#x27;gestural&#x27; (gestos). Importante porque a barra de três botões FICA POR CIMA do conteúdo do app: um botão do app posicionado no rodapé pode ser intocável, e o toque acaba acionando o botão Home.</p>
+<pre>adb shell settings put system accelerometer_rotation 0
+adb shell settings put system user_rotation 1
+adb shell settings put system user_rotation 0
+adb shell settings put system accelerometer_rotation 1</pre>
+<p>Força paisagem (user_rotation 1) e volta ao normal. É obrigatório desligar o accelerometer_rotation primeiro — com a rotação automática ligada, o user_rotation é sobrescrito e volta sozinho para retrato. Girar a tela foi a solução para alcançar um botão que ficava atrás da barra de navegação.</p>
+<pre>adb shell dumpsys power | grep -iE &quot;mWakefulness&quot;
+adb shell dumpsys window | grep -iE &quot;isKeyguardShowing|mCurrentFocus&quot;</pre>
+<p>Estado da tela e do bloqueio. &#x27;mWakefulness=Dozing&#x27; com &#x27;isKeyguardShowing=true&#x27; explica por que o uiautomator retorna uma árvore vazia: o app está atrás da tela de bloqueio. Já &#x27;mCurrentFocus&#x27; confirma qual app está realmente em primeiro plano — essencial para saber se o toque foi para o lugar certo.</p>
+<h2>8. Ambiente: Git Bash no Windows</h2>
+<pre>export MSYS2_ARG_CONV_EXCL=&#x27;*&#x27;</pre>
+<p>No Git Bash, o MSYS converte automaticamente argumentos que parecem caminho Unix. Isso corrompe caminhos do Android: &#x27;/data/local/tmp&#x27; virou &#x27;C:/Program Files/Git/data/local/tmp&#x27;. Esta variável desliga a conversão.</p>
+<div class="warn"><strong>Atenção:</strong> Mas cuidado — e este foi um erro real com consequência: exportar MSYS2_ARG_CONV_EXCL=&#x27;*&#x27; desativa a conversão para o shell INTEIRO. Ferramentas nativas do Windows (como o llvm-strip do NDK) passam então a receber caminhos MSYS (&#x27;/c/Users/...&#x27;) que não conseguem abrir, e falham. Prefira aplicar a variável apenas ao comando do adb, ou converta explicitamente com &#x27;cygpath -w&#x27; antes de chamar binários do Windows.</div>
+<pre>adb shell su -c &quot;ksud module list&quot; &gt; saida.json
+python -c &quot;import json;d=json.load(open(&#x27;saida.json&#x27;,encoding=&#x27;utf-8&#x27;))&quot;</pre>
+<p>Descrições de módulos costumam conter emoji. No Windows, o Python quebra com UnicodeEncodeError ao imprimir isso no console (cp1252). Abra sempre com encoding=&#x27;utf-8&#x27; e, se precisar imprimir, defina PYTHONIOENCODING=utf-8.</p>
+<h2>9. Sequência de teste de um módulo Zygisk</h2>
+<p>Ordem que se mostrou confiável, com verificação em cada etapa:</p>
+<pre># 1. instalar e CONFERIR que o binário certo chegou
+adb push modulo.zip /data/local/tmp/m.zip
+adb shell su -c &quot;ksud module install /data/local/tmp/m.zip&quot;
+adb shell su -c &quot;sha256sum /data/adb/modules_update/&lt;id&gt;/zygisk/arm64-v8a.so&quot;
+
+# 2. reiniciar e esperar de verdade
+adb reboot
+# laco: get-state == device, depois sys.boot_completed == 1
+
+# 3. saude do sistema ANTES de testar funcionalidade
+adb shell su -c &quot;ps -A&quot; | grep -c &quot;^u0_a&quot;
+adb shell su -c &quot;pidof com.android.systemui&quot;
+adb shell su -c &quot;ls -lt /data/tombstones/ | head -3&quot;
+adb shell su -c &quot;ls /data/adb/modules/&lt;id&gt;/disable&quot;
+
+# 4. so entao o teste funcional
+adb shell su -c &quot;am force-stop &lt;pacote&gt;&quot;
+adb logcat -c
+adb shell monkey -p &lt;pacote&gt; -c android.intent.category.LAUNCHER 1
+adb shell su -c &quot;logcat -d -s SuaTag:V&quot;</pre>
+<div class="warn"><strong>Atenção:</strong> Por que checar saúde antes de funcionalidade: um módulo defeituoso pode derrubar TODOS os processos de app. Nesse estado o aparelho responde ao adb normalmente, mas está com a tela preta — e você perde tempo investigando &#x27;por que o hook não funcionou&#x27; quando o problema real é que nenhum app consegue nem iniciar.</div>
+<div class="warn"><strong>Atenção:</strong> Ausência de crash num teste curto não prova nada. Numa sessão real, uma correção pareceu funcionar após alguns minutos de aparelho ocioso; o travamento só apareceu cerca de 40 minutos depois, quando apps passaram a ser abertos de fato. Exercite o caminho real — abrir, trocar e reabrir apps — antes de concluir que está corrigido.</div>
+<p class="signature">— Eduardo Lopes</p>
+</body>
+</html>
