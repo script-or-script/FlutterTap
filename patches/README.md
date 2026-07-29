@@ -22,7 +22,7 @@ steps:
 
 - fork: https://github.com/script-or-script/Dobby
 - branch: `fluttertap-android-build`
-- pinned commit: `025e9fc`, whose parent is upstream `e9fe7fb`
+- pinned commit: `3200ffb`, whose parent is upstream `e9fe7fb`
 
 This file is kept as the readable record of exactly what was changed in a
 third-party dependency and why — reviewing a `.patch` is considerably easier

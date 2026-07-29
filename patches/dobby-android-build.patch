@@ -1,6 +1,6 @@
-From 025e9fc2fe1c603288dd554fa9a2e0b671388c86 Mon Sep 17 00:00:00 2001
-From: Eduardo Lopes <eduardo.lopes@berghem.com.br>
-Date: Sun, 26 Jul 2026 06:24:56 -0300
+From 3200ffb4499db7bec50381f4ec9d88e815881fcf Mon Sep 17 00:00:00 2001
+From: Eduardo Lopes <84723393+script-or-script@users.noreply.github.com>
+Date: Wed, 29 Jul 2026 02:46:30 -0300
 Subject: [PATCH] Local patch: fix Android build (see docs/ARCHITECTURE.md in
  FlutterTap)
 
