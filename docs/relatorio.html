@@ -919,11 +919,7 @@ você quer que seja desativado automaticamente se algo der errado.
       <strong>MIT</strong> (<code>LICENSE</code>), com <code>THIRD_PARTY.md</code> e os textos das licenças de
       Dobby (Apache-2.0) e Capstone (BSD-3) embarcados no próprio <code>.zip</code>, como exigem essas
       licenças para redistribuição binária.</li>
-  <li><strong>Resolver o pin do submódulo Dobby</strong> — hoje ele aponta para um commit que existe apenas na
-      máquina de desenvolvimento, então <code>git clone --recurse-submodules</code> não funciona para
-      terceiros. O patch está preservado em <code>patches/dobby-android-build.patch</code>; a solução
-      pretendida é publicar um fork do Dobby com esse commit e reapontar o <code>.gitmodules</code>.
-      <em>Bloqueia a publicação.</em></li>
+  <li class="ok" style="list-style:none; margin-left:-20px; padding:6px 10px;">✔ Pin do submódulo Dobby resolvido — o submódulo aponta agora para um <em>fork</em> próprio (<code>script-or-script/Dobby</code>, branch <code>fluttertap-android-build</code>) que carrega o patch de build para Android, de modo que <code>git clone --recurse-submodules</code> já devolve uma árvore compilável. O patch segue legível em <code>patches/dobby-android-build.patch</code>.</li>
   <li>Escrever o README completo do GitHub (tutorial de instalação passo a passo com as capturas já
       disponíveis).</li>
   <li>Preparar e enviar o módulo para a página oficial de módulos do Magisk

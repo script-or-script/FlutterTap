@@ -137,7 +137,7 @@ Android 17 no Pixel 8a, SukiSU Ultra em execução (modo LKM), o log da instala�
 **2. Concessão de root e configuração do proxy**
 
 <p align="center">
-  <img src="docs/screenshots/pixel8a-android17/2-gerenciador%20%2B%20config.png" alt="Root negado, concessão manual no SukiSU Ultra e app configurado">
+  <img src="docs/screenshots/pixel8a-android17/2-gerenciador-config.png" alt="Root negado, concessão manual no SukiSU Ultra e app configurado">
 </p>
 
 Na primeira abertura o app pode exibir **"Root access denied"**: gerenciadores da família KernelSU
