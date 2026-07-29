@@ -81,6 +81,88 @@ Nenhuma dessas três funções é exportada/pública — por isso o script preci
 tempo real a cada execução, em vez de simplesmente chamar uma função pelo nome.
 </p>
 
+<h3>2.1 Por que um módulo Zygisk, e não Frida ou LSPosed</h3>
+<p>
+Essa é a pergunta mais importante do projeto, e vale respondê-la antes de qualquer detalhe técnico: se a
+técnica de bypass já existia como script Frida, por que reescrevê-la como módulo?
+</p>
+
+<h4>Frida: excelente para descobrir, inadequado para operar</h4>
+<p>
+O Frida é imbatível na fase de pesquisa — você edita JavaScript, recarrega e vê o efeito em segundos. Foi
+com ele que a técnica original foi desenvolvida, e continua sendo a ferramenta certa para <em>descobrir</em>
+como um app funciona. O problema aparece quando você precisa <em>usar</em> isso num trabalho real:
+</p>
+<ul>
+  <li><strong>Depende de sessão ativa.</strong> É preciso um <code>frida-server</code> rodando no aparelho e,
+      normalmente, um cabo USB e um terminal aberto. Fechou o terminal, perdeu o hook.</li>
+  <li><strong>Não sobrevive a reinício.</strong> Cada boot exige subir o servidor e reinjetar tudo.</li>
+  <li><strong>Precisa capturar o processo no nascimento.</strong> Para hookar algo que acontece na
+      inicialização do app, é preciso usar <code>-f</code> (spawn) e não anexar depois — o que na prática
+      significa reabrir o app pelo Frida a cada teste.</li>
+  <li><strong>É ruidoso e facilmente detectável.</strong> O <code>frida-server</code> abre uma porta em
+      escuta e deixa rastros conhecidos (nomes de thread, strings em memória, entradas em
+      <code>/proc</code>). Apps com proteção anti-tamper detectam isso trivialmente — e detectar Frida é
+      literalmente a primeira coisa que qualquer SDK de proteção mobile faz.</li>
+  <li><strong>Inviabiliza observação de longo prazo.</strong> Comportamento em segundo plano, push
+      notifications, sincronização periódica, um teste de várias horas, ou simplesmente entregar o aparelho
+      configurado para outra pessoa reproduzir — nada disso funciona amarrado a um cabo.</li>
+</ul>
+
+<h4>LSPosed/Xposed: camada errada do sistema</h4>
+<p>
+Aqui o motivo não é conveniência, é <strong>impossibilidade técnica direta</strong>. O Xposed (e o LSPosed,
+sua implementação moderna) hooka principalmente <strong>métodos Java/ART</strong> — é a ferramenta certa para
+interceptar chamadas do SDK do Android, alterar retornos de métodos de uma classe, contornar verificações
+escritas em Java/Kotlin.
+</p>
+<div class="warn">
+O ponto crítico: <strong>no Flutter, nada disso está em Java.</strong> O engine embute o próprio BoringSSL, e
+tanto a validação de certificado (<code>verify_cert_chain</code>) quanto a montagem do endereço de destino
+(<code>GetSockAddr</code>) são funções <strong>nativas, não exportadas, dentro do
+<code>libflutter.so</code></strong>. Não existe método Java para hookar. Um módulo LSPosed teria de fazer
+exatamente o mesmo trabalho nativo que o FlutterTap faz — resolver endereços por desmontagem e aplicar hook
+inline — só que carregando por cima todo o runtime do Xposed, sem ganhar nada em troca.
+</div>
+<p>
+Esse é também o motivo pelo qual <strong>instalar o certificado CA do Burp no Android não funciona</strong>
+com apps Flutter: o app ignora o repositório de certificados do sistema por completo. E, como o Flutter
+também não respeita o proxy configurado no Wi-Fi, não há atalho de configuração — o tráfego simplesmente sai
+sem passar pelo interceptador.
+</p>
+
+<h4>O que o módulo Zygisk resolve</h4>
+<table>
+  <tr><th></th><th>Frida</th><th>LSPosed / Xposed</th><th>FlutterTap (Zygisk)</th></tr>
+  <tr><td>Alcança código nativo do BoringSSL</td><td>Sim</td><td><strong>Não diretamente</strong></td><td>Sim</td></tr>
+  <tr><td>Persiste após reiniciar o aparelho</td><td>Não</td><td>Sim</td><td>Sim</td></tr>
+  <tr><td>Funciona sem cabo/ferramenta externa</td><td>Não</td><td>Sim</td><td>Sim</td></tr>
+  <tr><td>Porta em escuta / processo externo</td><td>Sim (detectável)</td><td>Não</td><td>Não</td></tr>
+  <tr><td>Pega o app desde o primeiro instante</td><td>Só com spawn manual</td><td>Sim</td><td>Sim</td></tr>
+  <tr><td>Zero impacto em apps não selecionados</td><td>N/A</td><td>Depende do módulo</td><td>Sim (<code>DLCLOSE</code>)</td></tr>
+  <tr><td>Velocidade de iteração no desenvolvimento</td><td><strong>Excelente</strong></td><td>Média</td><td>Baixa (recompilar + reinstalar)</td></tr>
+</table>
+<p>
+A última linha é uma desvantagem real e honesta: iterar num módulo nativo é bem mais lento do que editar um
+<code>.js</code> e recarregar. É justamente por isso que a divisão de trabalho faz sentido — <strong>Frida
+para descobrir, módulo para operar</strong>.
+</p>
+
+<h4>Por que o FlutterTap foi criado</h4>
+<div class="box">
+A motivação é prática, vinda de trabalho real de análise de tráfego mobile. Num teste de verdade você
+precisa que o app se comporte <strong>naturalmente ao longo do tempo</strong>: abrir e fechar várias vezes,
+receber notificação, sincronizar em segundo plano, ser usado por outra pessoa que não sabe o que é Frida.
+Precisa também de um ambiente <strong>reproduzível</strong> — capaz de ser reconfigurado por qualquer um
+tocando em checkboxes num app, sem terminal e sem comando decorado.
+<br><br>
+O FlutterTap transforma uma técnica que era um procedimento manual e frágil em <strong>infraestrutura</strong>:
+instala uma vez, escolhe os apps, e funciona sozinho a cada boot. A escolha de apps-alvo por pacote existe
+justamente para isso — o módulo não é um interceptador global; ele fica inerte em todo app que você não
+selecionou, se descarregando da memória imediatamente (seção 5), o que reduz tanto o risco de efeito
+colateral quanto a superfície de detecção.
+</div>
+
 <h2 class="page-break">3. Arquitetura da solução</h2>
 
 <h3>3.1 Módulo nativo (C++, Zygisk)</h3>

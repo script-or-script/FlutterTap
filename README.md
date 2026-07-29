@@ -25,6 +25,45 @@ A técnica para contornar isso é conhecida, mas normalmente exige rodar um scri
 `frida-server` ativo e o cabo conectado, a cada sessão. O FlutterTap transforma essa mesma abordagem em um
 módulo persistente: instala uma vez, escolhe os apps, e funciona sozinho a cada boot.
 
+## Por que um módulo, e não Frida ou LSPosed
+
+**Frida** é insuperável para *descobrir* como um app funciona — você edita JavaScript e vê o efeito em
+segundos. Foi assim que a técnica nasceu. O problema é *operar* com ela: depende de `frida-server` rodando
+com sessão ativa (fechou o terminal, perdeu o hook), não sobrevive a um reboot, exige capturar o processo no
+nascimento (`-f`) para pegar hooks de inicialização, e — o mais relevante num teste sério — **abre uma porta
+em escuta e deixa rastros conhecidos** (nomes de thread, strings em memória, entradas em `/proc`). Detectar
+Frida é literalmente a primeira coisa que qualquer SDK de proteção mobile faz.
+
+**LSPosed/Xposed** não é questão de conveniência, é de camada: ele hooka **métodos Java/ART**. No Flutter,
+`verify_cert_chain` e `GetSockAddr` são funções **nativas e não exportadas dentro do `libflutter.so`** — não
+existe método Java para interceptar. Um módulo LSPosed teria de fazer exatamente o mesmo trabalho nativo que
+o FlutterTap faz, carregando por cima todo o runtime do Xposed sem ganhar nada.
+
+|  | Frida | LSPosed | FlutterTap |
+|---|---|---|---|
+| Alcança o BoringSSL nativo | sim | **não diretamente** | sim |
+| Sobrevive a reboot | não | sim | sim |
+| Dispensa cabo/ferramenta externa | não | sim | sim |
+| Porta em escuta / processo externo | sim (detectável) | não | não |
+| Pega o app desde o primeiro instante | só com spawn manual | sim | sim |
+| Zero impacto em apps não selecionados | — | depende | sim (`DLCLOSE`) |
+| Velocidade de iteração no desenvolvimento | **excelente** | média | baixa |
+
+A última linha é uma desvantagem honesta: iterar num módulo nativo é bem mais lento que editar um `.js`.
+É por isso que a divisão de trabalho faz sentido — **Frida para descobrir, módulo para operar**.
+
+### Por que foi criado
+
+A motivação vem de trabalho real de análise de tráfego mobile. Num teste de verdade o app precisa se
+comportar **naturalmente ao longo do tempo**: abrir e fechar várias vezes, receber notificação, sincronizar
+em segundo plano, ser usado por alguém que não sabe o que é Frida. E o ambiente precisa ser **reproduzível**
+— reconfigurável por qualquer pessoa marcando checkboxes, sem terminal e sem comando decorado.
+
+O FlutterTap transforma um procedimento manual e frágil em **infraestrutura**. A seleção de apps por pacote
+existe justamente para isso: não é um interceptador global — ele fica inerte em todo app que você não
+selecionou, se descarregando da memória imediatamente, o que reduz tanto risco de efeito colateral quanto
+superfície de detecção.
+
 ## Como funciona
 
 Nenhuma das funções envolvidas é exportada, então elas precisam ser localizadas em tempo de execução, a
