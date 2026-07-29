@@ -16,18 +16,23 @@ Applies on top of upstream commit `e9fe7fb` (2023-04-21).
 
 ## You do not need to apply this manually
 
-The `third_party/dobby` submodule already points at a fork that carries this
+The `third_party/dobby` submodule already points at a repository carrying this
 patch, so `git clone --recurse-submodules` gets a buildable tree with no extra
 steps:
 
-- fork: https://github.com/script-or-script/Dobby
-- branch: `fluttertap-android-build`
-- pinned commit: `3200ffb`, whose parent is upstream `e9fe7fb`
+- repository: https://github.com/script-or-script/Dobby-android-patched
+- branch: `snapshot-android`
+- pinned commit: `3d71368`
 
-This file is kept as the readable record of exactly what was changed in a
-third-party dependency and why — reviewing a `.patch` is considerably easier
-than diffing two forks. It is also what you would re-apply if you ever want to
-rebase onto a newer upstream Dobby:
+That repository holds a **single snapshot commit** of upstream `e9fe7fb`
+(2023-04-21) with this patch already applied — it is not a fork and carries no
+upstream history, so the commit has no parent. That was a deliberate choice: a
+fork shares object storage with its parent repository, which means anything ever
+pushed to it stays reachable through the upstream repo even after the fork is
+deleted. A standalone repository can actually be cleaned up.
+
+This file is therefore the record of exactly what differs from upstream, which is
+also what you would re-apply if you ever want to move onto a newer Dobby:
 
 ```sh
 cd module/src/main/cpp/third_party/dobby

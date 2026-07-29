@@ -248,10 +248,10 @@ Standard Magisk module layout, understood the same way by Magisk, KernelSU
 
 - **Capstone 5.0.9** (BSD-3), vendored as a git submodule, built with only
   `CAPSTONE_ARM64_SUPPORT`/`CAPSTONE_X86_SUPPORT` enabled. Unmodified.
-- **Dobby** (Apache-2.0), vendored as a git submodule pinned to commit `3200ffb`
-  on the fork [script-or-script/Dobby](https://github.com/script-or-script/Dobby)
-  (branch `fluttertap-android-build`), which is upstream `e9fe7fb` (2023-04-21)
-  plus the two-file Android build fix kept readable at
+- **Dobby** (Apache-2.0), vendored as a git submodule pinned to commit `3d71368`
+  in [script-or-script/Dobby-android-patched](https://github.com/script-or-script/Dobby-android-patched)
+  (branch `snapshot-android`) -- a single snapshot of upstream `e9fe7fb`
+  (2023-04-21) with the two-file Android build fix applied, kept readable at
   `patches/dobby-android-build.patch`. Pinned rather than tracking upstream HEAD
   because
   Upstream's HEAD (as of this writing, last commit 2024-03-14) has several
