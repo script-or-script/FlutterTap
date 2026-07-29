@@ -18,9 +18,34 @@ android {
         versionName = "1.0.0"
     }
 
+    // Release signing credentials come from gradle.properties in the user's
+    // GRADLE_USER_HOME (~/.gradle/gradle.properties), never from this repository:
+    // the keystore and its password must not be committed. A clone without them
+    // still builds -- `release` is simply left unsigned, which is the correct
+    // behaviour for anyone who is not the release signer. See docs/BUILD.md.
+    val storeFilePath = providers.gradleProperty("FLUTTERTAP_STORE_FILE").orNull
+    val hasReleaseKeystore = storeFilePath != null && file(storeFilePath).exists()
+
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            create("release") {
+                storeFile = file(storeFilePath!!)
+                storePassword = providers.gradleProperty("FLUTTERTAP_STORE_PASSWORD").get()
+                keyAlias = providers.gradleProperty("FLUTTERTAP_KEY_ALIAS").get()
+                keyPassword = providers.gradleProperty("FLUTTERTAP_KEY_PASSWORD").get()
+                // Only v3 actually ends up in the APK, and that is correct: v1
+                // (JAR signing) matters below API 24 and v2 below API 28, so AGP
+                // skips both for minSdk 29. Verified with
+                // `apksigner verify --print-certs`: v3 true, v1/v2 false.
+                enableV3Signing = true
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = if (hasReleaseKeystore) signingConfigs.getByName("release") else null
         }
     }
 

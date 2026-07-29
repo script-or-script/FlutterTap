@@ -47,6 +47,47 @@ Produces `libfluttertap.so` for `arm64-v8a` and `x86_64` under
 
 APK output: `manager-app/build/outputs/apk/`.
 
+### Release signing
+
+`assembleRelease` is signed only if the release keystore is configured; otherwise it produces an
+**unsigned** APK, which Android will refuse to install. That is deliberate — a clone should build
+without needing the maintainer's private key.
+
+Credentials are read from `gradle.properties` in your `GRADLE_USER_HOME` (`~/.gradle/gradle.properties`),
+never from this repository:
+
+```properties
+FLUTTERTAP_STORE_FILE=/absolute/path/to/your-release.jks
+FLUTTERTAP_STORE_PASSWORD=...
+FLUTTERTAP_KEY_ALIAS=fluttertap
+FLUTTERTAP_KEY_PASSWORD=...
+```
+
+To create a keystore:
+
+```bash
+keytool -genkeypair -keystore your-release.jks -alias fluttertap \
+        -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=Your Name"
+```
+
+Keep the `.jks` **outside the repository** (`.gitignore` blocks `*.jks`/`*.keystore`, but the safest
+place is simply elsewhere on disk), and back up both the keystore and its password. Losing them means
+never being able to ship an update Android accepts as the same app — the only way out is changing the
+`applicationId`.
+
+Verify what you built:
+
+```bash
+apksigner verify --verbose --print-certs manager-app/build/outputs/apk/release/manager-app-release.apk
+```
+
+Expect `Verifies` with **v3 true and v1/v2 false**. That is correct, not a defect: v1 (JAR signing)
+only matters below API 24 and v2 below API 28, so AGP skips both for `minSdk 29`.
+
+Note that a release-signed APK cannot be installed over a debug-signed one — Android rejects the
+signature change. Uninstall the old build first. Configuration in `/data/adb/fluttertap/` survives the
+uninstall, so target apps and proxy settings are preserved.
+
 ## Packaging a flashable module zip
 
 ```bash

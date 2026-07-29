@@ -8,9 +8,10 @@ Acompanha um **app gerenciador** (Jetpack Compose) para escolher os apps-alvo e 
 direto no celular.
 
 <p align="center">
-  <img src="docs/screenshots/pixel8a-android17/07_manager_full_view.png" width="260" alt="App gerenciador do FlutterTap">
-  <img src="docs/screenshots/pixel8a-android17/06_apps_selected.png" width="260" alt="Seleção de apps-alvo">
-  <img src="docs/screenshots/pixel8a-android17/04_module_enabled_action.png" width="260" alt="Módulo ativo na lista do gerenciador de root">
+  <img src="docs/screenshots/pixel8a-android17/5-bypass-app2.png" alt="Tráfego HTTPS de um app Flutter capturado e descriptografado no Burp Suite">
+</p>
+<p align="center">
+  <em>Tráfego HTTPS de um app Flutter chegando descriptografado ao Burp — sem certificado CA instalado no aparelho.</em>
 </p>
 
 ## Por que existe
@@ -119,8 +120,60 @@ Validado em hardware em dois ambientes deliberadamente distintos:
 No Burp, use um listener em **modo invisível** (*invisible proxying*), já que o app envia requisições
 comuns, não requisições de proxy.
 
-Capturas passo a passo da instalação, em um Pixel 8a com Android 17, estão em
-[`docs/screenshots/pixel8a-android17/`](docs/screenshots/pixel8a-android17/).
+### Passo a passo com evidências
+
+Capturas reais de um Pixel 8a com Android 17 e SukiSU Ultra, na ordem em que as etapas acontecem.
+
+**1. Ambiente e instalação do módulo**
+
+<p align="center">
+  <img src="docs/screenshots/pixel8a-android17/1-device.png" alt="Android 17 no Pixel 8a, SukiSU Ultra em execução, log da instalação e módulo habilitado">
+</p>
+
+Android 17 no Pixel 8a, SukiSU Ultra em execução (modo LKM), o log da instalação terminando em
+*Module installed successfully* e, por fim, o FlutterTap habilitado na lista de módulos — já com o botão
+**Ação**, que abre o app gerenciador direto dali.
+
+**2. Concessão de root e configuração do proxy**
+
+<p align="center">
+  <img src="docs/screenshots/pixel8a-android17/2-gerenciador%20%2B%20config.png" alt="Root negado, concessão manual no SukiSU Ultra e app configurado">
+</p>
+
+Na primeira abertura o app pode exibir **"Root access denied"**: gerenciadores da família KernelSU
+guardam a decisão por app e não reexibem o prompt. A solução está destacada na própria tela — abrir o
+SukiSU Ultra, ir em **Perfil do Aplicativo** e ligar o **SuperUsuário** manualmente. Feito isso, o app
+passa a reportar *Root access granted*, *Module installed* e *Enabled*, e o IP/porta reais do proxy podem
+ser salvos.
+
+**3. Preparar o Burp**
+
+<p align="center">
+  <img src="docs/screenshots/pixel8a-android17/3-invisible-proxy.png" width="620" alt="Listener do Burp com Invisible Proxying ativado">
+</p>
+
+O listener precisa estar com **Support invisible proxying** marcado (aba *Request handling*). Sem isso o
+Burp descarta as conexões: o app envia requisições HTTP comuns, não requisições dirigidas a um proxy.
+
+**4. Prova de ponta a ponta — HTTP simples**
+
+<p align="center">
+  <img src="docs/screenshots/pixel8a-android17/4-bypass-app1.png" alt="VulnApp selecionado, chamada disparada e tráfego capturado no Burp">
+</p>
+
+Com o **VulnApp** marcado como alvo, a chamada disparada no aparelho aparece no Burp chegando pela
+**porta 8083** — a porta do listener, o que comprova que o redirecionamento aconteceu. O
+`user-agent: Dart/3.12 (dart:io)` confirma que a requisição saiu do cliente HTTP do Flutter.
+
+**5. Prova de ponta a ponta — HTTPS descriptografado**
+
+<p align="center">
+  <img src="docs/screenshots/pixel8a-android17/5-bypass-app2.png" alt="Ostorlab Insecure App com tráfego HTTPS descriptografado no Burp">
+</p>
+
+O mesmo com o **Ostorlab Insecure App**, agora sobre **HTTPS**: o Burp mostra `https://ostorlab.co` com
+resposta **HTTP/2 200** e o HTML em texto claro. Este é o resultado que o bypass de pinning entrega —
+e **nenhum certificado CA foi instalado no aparelho**.
 
 ### Configuração sem o app gerenciador
 
