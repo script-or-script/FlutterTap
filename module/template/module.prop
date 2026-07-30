@@ -4,3 +4,4 @@ version=v1.0.0
 versionCode=1
 author=Eduardo Lopes
 description=Redirects the network traffic of selected Flutter apps to a configurable proxy and bypasses TLS certificate verification, for traffic analysis purposes. Configure via the FlutterTap manager app.
+updateJson=https://raw.githubusercontent.com/script-or-script/FlutterTap/master/update.json
