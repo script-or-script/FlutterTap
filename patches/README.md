@@ -22,7 +22,7 @@ steps:
 
 - repository: https://github.com/script-or-script/Dobby-android-patched
 - branch: `snapshot-android`
-- pinned commit: `3d71368`
+- pinned commit: `c447852`
 
 That repository holds a **single snapshot commit** of upstream `e9fe7fb`
 (2023-04-21) with this patch already applied — it is not a fork and carries no
