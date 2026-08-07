@@ -112,7 +112,14 @@ Validated on hardware in two deliberately different environments:
 
 ## Installation
 
-Download both files from the [latest release](../../releases/latest).
+**Recommended — via MMRL:** in [MMRL](https://mmrl.dev/) open *Repositories → Add* and paste the
+repository URL below. FlutterTap then installs in one tap and gets update notifications automatically:
+
+```
+https://raw.githubusercontent.com/script-or-script/FlutterTap-mmrl/main/json/modules.json
+```
+
+**Or manually:** download both files from the [latest release](../../releases/latest).
 
 1. **Install the module**: flash `FlutterTap-<version>.zip` from your root manager app
    (Magisk / KernelSU / SukiSu Ultra / APatch). Reboot.

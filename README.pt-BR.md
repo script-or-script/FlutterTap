@@ -116,7 +116,14 @@ Validado em hardware em dois ambientes deliberadamente distintos:
 
 ## Instalação
 
-Baixe os dois arquivos da [última release](../../releases/latest).
+**Recomendado — via MMRL:** no [MMRL](https://mmrl.dev/), abra *Repositories → Add* e cole a URL do
+repositório abaixo. O FlutterTap instala em um toque e recebe notificação de atualização automaticamente:
+
+```
+https://raw.githubusercontent.com/script-or-script/FlutterTap-mmrl/main/json/modules.json
+```
+
+**Ou manualmente:** baixe os dois arquivos da [última release](../../releases/latest).
 
 1. **Instale o módulo**: instale o `FlutterTap-<versão>.zip` pelo app do seu gerenciador de root
    (Magisk / KernelSU / SukiSu Ultra / APatch). Reinicie o aparelho.

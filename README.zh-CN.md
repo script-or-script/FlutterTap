@@ -98,7 +98,13 @@ FlutterTap 把一个手工且脆弱的流程变成了**基础设施**。按应�
 
 ## 安装
 
-请从[最新 release](../../releases/latest) 下载两个文件。
+**推荐 — 通过 MMRL：** 在 [MMRL](https://mmrl.dev/) 中打开 *Repositories → Add*，粘贴下面的仓库地址。FlutterTap 即可一键安装，并自动获得更新通知：
+
+```
+https://raw.githubusercontent.com/script-or-script/FlutterTap-mmrl/main/json/modules.json
+```
+
+**或手动安装：** 请从[最新 release](../../releases/latest) 下载两个文件。
 
 1. **安装模块**：在你的 Root 管理器（Magisk / KernelSU / SukiSu Ultra / APatch）中刷入
    `FlutterTap-<版本>.zip`，然后重启设备。
